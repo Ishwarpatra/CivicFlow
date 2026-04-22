@@ -1,0 +1,7 @@
+export const SYSTEM_CONSTANTS = {
+    COMMANDS: {
+        FIND_BOOTH_LOCATION: 'FIND_BOOTH_LOCATION|',
+        START_PITCH: 'START_PITCH',
+        KNOW_REP: 'KNOW_REP',
+    }
+};
