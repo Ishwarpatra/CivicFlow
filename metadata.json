@@ -1,0 +1,8 @@
+{
+  "name": "CivicFlow",
+  "description": "CivicFlow: The Intelligent Indian Election Navigator",
+  "requestFramePermissions": [
+    "geolocation"
+  ],
+  "majorCapabilities": []
+}
