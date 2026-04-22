@@ -39,7 +39,7 @@ export const handleChat = async (message: string) => {
              if(coords.length === 2) {
                  const lat = coords[0];
                  const lng = coords[1];
-                 const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
+                 const mapsUrl = `http://maps.google.com/maps?q=${lat},${lng}`;
                  return `I received your location coordinates! I've scanned the electoral registry... Your nearest station is likely within 1.2km of you. \n\n<a href="${mapsUrl}" target="_blank" class="text-[#FF9933] font-bold underline hover:text-[#1A1A1A] transition-colors">Open Booth Locator Map</a>`;
              }
          }

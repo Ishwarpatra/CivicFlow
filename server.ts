@@ -38,6 +38,15 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok' });
 });
 
+const escapeHtml = (unsafe: string) => {
+    return unsafe
+         .replace(/&/g, "&amp;")
+         .replace(/</g, "&lt;")
+         .replace(/>/g, "&gt;")
+         .replace(/"/g, "&quot;")
+         .replace(/'/g, "&#039;");
+};
+
 app.post('/api/chat', chatLimiter, upload.none(), async (req, res) => {
     try {
         const message = req.body.message;
@@ -47,11 +56,11 @@ app.post('/api/chat', chatLimiter, upload.none(), async (req, res) => {
         
         let htmlResponse = "";
         
-        // Sanitize and Echo user message to the UI
+        // Escape and Echo user message to the UI
         if(!message.startsWith(SYSTEM_CONSTANTS.COMMANDS.FIND_BOOTH_LOCATION) && 
            message !== SYSTEM_CONSTANTS.COMMANDS.START_PITCH && 
            message !== SYSTEM_CONSTANTS.COMMANDS.KNOW_REP) {
-             const safeUserMessage = DOMPurify.sanitize(message);
+             const safeUserMessage = escapeHtml(message);
              htmlResponse += generateUserMessageHtml(safeUserMessage);
         }
 
