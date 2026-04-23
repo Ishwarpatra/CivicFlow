@@ -92,3 +92,13 @@ export const generateGenericOfflineFallbackHtml = (errorDetails: string) => `
         <p class="text-[9px] opacity-70 p-2 border border-[#ea4335] bg-[#F8F7F3] break-words text-[#ea4335]">Log: ${errorDetails}</p>
     </div>
 `;
+
+export const generateErrorHtml = (errorDetails: string) => `
+    <div x-data="{ show: false }" x-init="setTimeout(() => show = true, 50)" :class="show ? 'chat-bubble-entered' : 'chat-bubble-enter'" class="spring-m3 flex gap-4 mb-6 relative">
+        <div class="w-8 h-8 bg-[#ea4335] text-white flex items-center justify-center text-[10px] font-bold shrink-0 border border-[#1A1A1A]">ERR</div>
+        <div class="p-4 bg-[#F8F7F3] text-[#ea4335] text-sm leading-relaxed max-w-[85%] sm:max-w-[80%] border border-[#ea4335] shadow-[4px_4px_0px_#ea4335] flex flex-col gap-2">
+            <p class="font-bold uppercase tracking-widest text-[10px] mb-2 text-[#1A1A1A]">System Error</p>
+            <p>${errorDetails}</p>
+        </div>
+    </div>
+`;
