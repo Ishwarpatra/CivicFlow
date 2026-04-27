@@ -18,7 +18,7 @@ const logger = pino({
     }
 });
 
-export const handleChat = async (message: string) => {
+export const handleChat = async (message: string, historyStr: string = "[]") => {
     
     // Sequoia Pitch Auto-Demo Handler
     if (message === SYSTEM_CONSTANTS.COMMANDS.START_PITCH) {
@@ -44,18 +44,25 @@ export const handleChat = async (message: string) => {
              }
          }
 
-        const response = await ai.generateContent({
-             model: "gemini-1.5-pro",
-             contents: message,
-             config: {
-                 systemInstruction: instructions,
-                 tools: [
-                     { googleSearch: {} } // Enable grounding for latest ECI rules
-                 ]
-             }
+        let history = [];
+        try {
+            history = JSON.parse(historyStr);
+        } catch (e) {
+            history = [];
+        }
+
+        const chatSession = ai.startChat({
+             history: history,
+             systemInstruction: instructions,
+             tools: [
+                 { googleSearch: {} } // Enable grounding for latest ECI rules
+             ]
         });
+
+        const response = await chatSession.sendMessage(message);
+        const responseText = response.response.text();
         
-        const rawHtml = await marked.parse(response.text || "I'm sorry, I encountered an issue.");
+        const rawHtml = await marked.parse(responseText || "I'm sorry, I encountered an issue.");
         const cleanHtml = DOMPurify.sanitize(rawHtml, { USE_PROFILES: { html: true } });
         return `<div class="[&>p]:mb-3 [&>p:last-child]:mb-0 [&_a]:text-[#FF9933] [&_a]:font-bold [&_a]:underline hover:[&_a]:text-[#1A1A1A] [&_a]:transition-colors [&_strong]:font-bold">${cleanHtml}</div>`;
         

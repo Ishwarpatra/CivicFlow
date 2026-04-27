@@ -23,9 +23,11 @@ const PORT = process.env.PORT || 3000;
 const upload = multer();
 
 const chatLimiter = rateLimit({
-    windowMs: 1 * 60 * 1000, // 1 minute
-    max: 15, // Limit each IP to 15 requests per windowMs
-    message: generateErrorHtml("Too many requests from this IP, please try again after a minute."),
+    windowMs: 1 * 60 * 1000,
+    max: 15,
+    handler: (req, res) => {
+        res.status(200).send(generateErrorHtml("Too many requests from this IP, please try again after a minute."));
+    },
     standardHeaders: true,
     legacyHeaders: false,
 });
@@ -38,18 +40,10 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok' });
 });
 
-const escapeHtml = (unsafe: string) => {
-    return unsafe
-         .replace(/&/g, "&amp;")
-         .replace(/</g, "&lt;")
-         .replace(/>/g, "&gt;")
-         .replace(/"/g, "&quot;")
-         .replace(/'/g, "&#039;");
-};
-
 app.post('/api/chat', chatLimiter, upload.none(), async (req, res) => {
     try {
         const message = req.body.message;
+        const historyStr = req.body.history || "[]";
         if (!message) {
              return res.send(generateErrorHtml("Message is required"));
         }
@@ -60,13 +54,17 @@ app.post('/api/chat', chatLimiter, upload.none(), async (req, res) => {
         if(!message.startsWith(SYSTEM_CONSTANTS.COMMANDS.FIND_BOOTH_LOCATION) && 
            message !== SYSTEM_CONSTANTS.COMMANDS.START_PITCH && 
            message !== SYSTEM_CONSTANTS.COMMANDS.KNOW_REP) {
-             const safeUserMessage = escapeHtml(message);
+             const safeUserMessage = DOMPurify.sanitize(message, { ALLOWED_TAGS: [] });
              htmlResponse += generateUserMessageHtml(safeUserMessage);
         }
 
-        const agentResponse = await handleChat(message);
+        const agentResponse = await handleChat(message, historyStr);
 
          htmlResponse += generateAgentMessageHtml(agentResponse);
+         
+         // Trigger client side event to push AI message to alpine store
+         let safeAiText = DOMPurify.sanitize(agentResponse, { ALLOWED_TAGS: [] });
+         res.set('HX-Trigger-After-Swap', JSON.stringify({ "ai-response": safeAiText }));
 
         res.send(htmlResponse);
     } catch(e: any) {
