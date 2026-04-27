@@ -3,6 +3,8 @@ import dotenv from 'dotenv';
 import path from 'path';
 import multer from 'multer';
 import pino from 'pino';
+import cors from 'cors';
+import session from 'express-session';
 import { handleChat } from './src/chatHandler.js';
 import rateLimit from 'express-rate-limit';
 import DOMPurify from 'isomorphic-dompurify';
@@ -22,6 +24,16 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const upload = multer();
 
+app.set('trust proxy', 1);
+app.use(cors({ origin: true, credentials: true }));
+
+app.use(session({
+    secret: process.env.SESSION_SECRET || 'civic-flow-fallback-secret',
+    resave: false,
+    saveUninitialized: true,
+    cookie: { secure: false } // Set to true in prod with https
+}));
+
 const chatLimiter = rateLimit({
     windowMs: 1 * 60 * 1000,
     max: 15,
@@ -40,12 +52,25 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok' });
 });
 
+app.post('/api/vote', upload.none(), (req, res) => {
+     res.send(`<button class="px-3 py-2 bg-[#1A1A1A] text-white border-2 border-[#1A1A1A] font-bold text-xs uppercase tracking-widest relative flex items-center gap-2 group shadow-[2px_2px_0px_#1A1A1A]">
+                    <span>VOTED</span>
+                    <svg class="w-4 h-4 ink-applied" viewBox="0 0 24 24" fill="none">
+                        <path stroke-linecap="round" stroke-linejoin="round" class="ink-path" stroke-width="4" d="M12 2v8" stroke="#8b5cf6"/>
+                    </svg>
+                </button>`);
+});
+
 app.post('/api/chat', chatLimiter, upload.none(), async (req, res) => {
     try {
         const message = req.body.message;
-        const historyStr = req.body.history || "[]";
+        const locale = req.query.lang || 'en';
+        
         if (!message) {
              return res.send(generateErrorHtml("Message is required"));
+        }
+        if (message.length > 500) {
+             return res.send(generateErrorHtml("Message length cannot exceed 500 characters."));
         }
         
         let htmlResponse = "";
@@ -58,13 +83,13 @@ app.post('/api/chat', chatLimiter, upload.none(), async (req, res) => {
              htmlResponse += generateUserMessageHtml(safeUserMessage);
         }
 
-        const agentResponse = await handleChat(message, historyStr);
+        const sess = req.session as any;
+        sess.chatHistory = sess.chatHistory || [];
 
-         htmlResponse += generateAgentMessageHtml(agentResponse);
-         
-         // Trigger client side event to push AI message to alpine store
-         let safeAiText = DOMPurify.sanitize(agentResponse, { ALLOWED_TAGS: [] });
-         res.set('HX-Trigger-After-Swap', JSON.stringify({ "ai-response": safeAiText }));
+        const { agentHtml, newHistory } = await handleChat(message, sess.chatHistory, locale as string);
+        sess.chatHistory = newHistory;
+
+         htmlResponse += generateAgentMessageHtml(agentHtml);
 
         res.send(htmlResponse);
     } catch(e: any) {

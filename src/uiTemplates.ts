@@ -55,15 +55,13 @@ export const generateRepInsightsHtml = () => `
                 <p class="text-xs opacity-70">Sourced from PRS India & MyNeta</p>
             </div>
             
-            <div x-data="{ voted: false }" class="mt-4 flex justify-between items-center bg-[#F0F0F0] p-2 border-2 border-[#1A1A1A] shadow-[2px_2px_0px_#1A1A1A]">
+            <div class="mt-4 flex justify-between items-center bg-[#F0F0F0] p-2 border-2 border-[#1A1A1A] shadow-[2px_2px_0px_#1A1A1A]">
                 <p class="text-xs font-bold uppercase pl-2 flex-1">Mark as Voted?</p>
-                <button @click="voted = true" :class="voted ? 'bg-[#1A1A1A] text-white ink-applied' : 'bg-white text-[#1A1A1A] hover:bg-[#FF9933] hover:text-white'" class="px-3 py-2 border-2 border-[#1A1A1A] font-bold text-xs uppercase tracking-widest relative transition-colors flex items-center gap-2 group cursor-pointer shadow-[2px_2px_0px_#1A1A1A] active:translate-y-[2px] active:shadow-none">
-                    <span x-show="!voted">VOTE NOW</span>
-                    <span x-show="voted">VOTED</span>
-                    <svg x-show="voted" class="w-4 h-4" viewBox="0 0 24 24" fill="none">
-                        <path stroke-linecap="round" stroke-linejoin="round" class="ink-path" stroke-width="4" d="M12 2v8" stroke="#8b5cf6"/>
-                    </svg>
-                </button>
+                <form hx-post="/api/vote" hx-swap="outerHTML">
+                    <button type="submit" class="bg-white text-[#1A1A1A] hover:bg-[#FF9933] hover:text-white px-3 py-2 border-2 border-[#1A1A1A] font-bold text-xs uppercase tracking-widest relative transition-colors flex items-center gap-2 group cursor-pointer shadow-[2px_2px_0px_#1A1A1A] active:translate-y-[2px] active:shadow-none">
+                        <span>VOTE NOW</span>
+                    </button>
+                </form>
             </div>
         </div>
     </div>
