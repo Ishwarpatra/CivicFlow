@@ -18,7 +18,7 @@ const logger = pino({
     }
 });
 
-export const handleChat = async (message: string, history: any[] = [], locale: string = "en", apiKey?: string) => {
+export const handleChat = async (message: string, history: any[] = [], locale: string = "en", apiKey?: string, userContext?: any) => {
     
     // Sequoia Pitch Auto-Demo Handler
     if (message === SYSTEM_CONSTANTS.COMMANDS.START_PITCH) {
@@ -26,13 +26,29 @@ export const handleChat = async (message: string, history: any[] = [], locale: s
     }
 
     if (message === SYSTEM_CONSTANTS.COMMANDS.KNOW_REP) {
-        return { agentHtml: generateRepInsightsHtml(), newHistory: history };
+        if (userContext?.representatives && userContext.representatives.length > 0) {
+            const rep = userContext.representatives[0];
+            const html = `
+                <div class="space-y-4">
+                    <p>Based on your profile in <strong>${userContext.constituency.name}</strong>, your current representative is <strong>${rep.name}</strong> from <strong>${rep.party}</strong>.</p>
+                </div>
+            `;
+            return { agentHtml: html, newHistory: history };
+        } else {
+             return { agentHtml: generateRepInsightsHtml(), newHistory: history };
+        }
     }
 
     try {
         const ai = getGeminiModel(apiKey);
         
         let responseText = "";
+        
+        // Append user context to instructions if it exists
+        let userContextString = "";
+        if (userContext) {
+            userContextString = `\n\nUSER CONTEXT:\n${JSON.stringify(userContext, null, 2)}\nUse this context to answer questions about their specific representative or constituency when asked.`;
+        }
         
         // Check if we are running in dummy mock mode (placeholder key)
         if (ai === "MOCK_MODE") {
@@ -50,7 +66,7 @@ export const handleChat = async (message: string, history: any[] = [], locale: s
         }
         
         const languageInstruction = locale === 'hi' ? 'You MUST respond entirely in Hindi (हिंदी).' : 'You MUST respond entirely in English.';
-        const instructions = SYSTEM_CONSTANTS.PROMPTS.SYSTEM_INSTRUCTION + languageInstruction;
+        const instructions = SYSTEM_CONSTANTS.PROMPTS.SYSTEM_INSTRUCTION + languageInstruction + userContextString;
 
         if (message.startsWith(SYSTEM_CONSTANTS.COMMANDS.FIND_BOOTH_LOCATION)) {
              const coords = message.replace(SYSTEM_CONSTANTS.COMMANDS.FIND_BOOTH_LOCATION, "").split("|");
