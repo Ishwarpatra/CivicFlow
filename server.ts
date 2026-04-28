@@ -196,7 +196,7 @@ const apiRouter = createApiRouter(db, logger, upload, chatLimiter, csrfProtectio
 app.use('/api', apiRouter);
 
 // --- Core API Handlers ---
-app.get('/api/health', (req, res) => {
+app.get('/api/health', (req: express.Request, res: express.Response) => {
   try {
       db.prepare('SELECT 1').get();
       res.json({ status: 'ok', electionStates: electionData.states?.length ?? 0 });
@@ -205,11 +205,11 @@ app.get('/api/health', (req, res) => {
   }
 });
 
-app.get('/api/csrf', csrfProtection, (req, res) => {
+app.get('/api/csrf', csrfProtection, (req: express.Request, res: express.Response) => {
   res.json({ csrfToken: req.csrfToken() });
 });
 
-app.get('/api/auth/me', (req, res) => {
+app.get('/api/auth/me', (req: express.Request, res: express.Response) => {
     if (!req.session.userId) return res.json({ success: false });
     const user = db.prepare("SELECT email, role, prompt_credits FROM users WHERE id = ?").get(req.session.userId) as any;
     if (user) {
@@ -219,7 +219,7 @@ app.get('/api/auth/me', (req, res) => {
     }
 });
 
-app.post('/api/register', csrfProtection, async (req, res) => {
+app.post('/api/register', csrfProtection, async (req: express.Request, res: express.Response) => {
     const { email, password } = req.body;
     if (!email || !email.includes('@') || email.length > 255) {
         return res.status(400).json({ success: false, message: 'Invalid email format' });
@@ -247,7 +247,34 @@ app.post('/api/register', csrfProtection, async (req, res) => {
     }
 });
 
-app.post('/api/login', csrfProtection, async (req, res) => {
+app.get('/api/constituency', (req: express.Request, res: express.Response) => {
+    const state = req.query.state ? String(req.query.state).toLowerCase() : '';
+    const name = req.query.name ? String(req.query.name).toLowerCase() : '';
+
+    if (state && name) {
+        const record = constituencyIndex.get(`${state}|${name}`);
+        if (record) return res.json({ success: true, data: record, source: electionData.election });
+        return res.status(404).json({ success: false, message: 'Constituency not found in 2024 dataset.' });
+    }
+
+    if (state) {
+        const stateRecord = electionData.states?.find((s: any) => s.name.toLowerCase() === state);
+        if (stateRecord) return res.json({ success: true, data: stateRecord, source: electionData.election });
+        return res.status(404).json({ success: false, message: 'State not found in 2024 dataset.' });
+    }
+
+    // No filter — return all state names
+    res.json({
+        success: true,
+        source: electionData.election,
+        states: electionData.states?.map((s: any) => ({
+            name: s.name,
+            constituencyCount: s.constituencies?.length ?? 0
+        }))
+    });
+});
+
+app.post('/api/login', csrfProtection, async (req: express.Request, res: express.Response) => {
     const { email, password } = req.body;
     if (!email || !password) return res.status(400).json({ success: false, message: 'Missing credentials' });
 
@@ -267,20 +294,20 @@ app.post('/api/login', csrfProtection, async (req, res) => {
     }
 });
 
-app.post('/api/logout', csrfProtection, (req, res) => {
+app.post('/api/logout', csrfProtection, (req: express.Request, res: express.Response) => {
     req.session.destroy(() => {
         res.setHeader('HX-Trigger', JSON.stringify({ 'auth-changed': null }));
         res.status(204).send();
     });
 });
 
-app.get('/api/settings', csrfProtection, (req, res) => {
+app.get('/api/settings', csrfProtection, (req: express.Request, res: express.Response) => {
     if (!req.session.userId) return res.status(401).json({ success: false, message: 'Unauthorized' });
     const user = db.prepare("SELECT epic_number, state, constituency, language_preference FROM users WHERE id = ?").get(req.session.userId) as any;
     res.json({ success: true, settings: user });
 });
 
-app.post('/api/settings', csrfProtection, (req, res) => {
+app.post('/api/settings', csrfProtection, (req: express.Request, res: express.Response) => {
     if (!req.session.userId) return res.status(401).json({ success: false, message: 'Unauthorized' });
     
     const { epic_number, state, constituency, language_preference } = req.body;
@@ -297,7 +324,7 @@ app.post('/api/settings', csrfProtection, (req, res) => {
     }
 });
 
-app.get('/api/admin/logs', csrfProtection, async (req, res) => {
+app.get('/api/admin/logs', csrfProtection, async (req: express.Request, res: express.Response) => {
     if (req.session.role !== 'admin') return res.status(403).send('<div class="p-4 bg-red-600 text-white">Access Denied</div>');
     
     try {
@@ -347,7 +374,7 @@ app.get('/api/admin/logs', csrfProtection, async (req, res) => {
 });
 
 // --- SPA Fallback ---
-app.get(/^(?!\/api).*$/, (req, res) => {
+app.get(/^(?!\/api).*$/, (req: express.Request, res: express.Response) => {
   res.sendFile(path.join(process.cwd(), 'public', 'index.html'));
 });
 
