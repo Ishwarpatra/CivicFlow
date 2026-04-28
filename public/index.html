@@ -9,6 +9,43 @@
     <!-- Alpine.js for UI reactivity -->
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.13.3/dist/cdn.min.js"></script>
     <link rel="stylesheet" href="/style.css">
+    <script>
+        const dict = {
+            en: {
+                lang: "Lang:",
+                login: "Log In",
+                logout: "Logout",
+                placeholder: "Ask about eligibility...",
+                synthesizing: "Synthesizing with Vertex AI...",
+                acquiring: "Acquiring GPS Signal...",
+                check: "Check Eligibility",
+                find: "Find Polling Booth",
+                know: "Know Your Rep",
+                welcome: "Namaskar! I'm your CivicFlow Navigator. I can help you check your voting eligibility, find your polling booth, or know your representative. What would you like to do?"
+            },
+            hi: {
+                lang: "भाषा:",
+                login: "लॉग इन",
+                logout: "लॉग आउट",
+                placeholder: "पात्रता के बारे में पूछें...",
+                synthesizing: "वरटेक्स एआई के साथ विचार संसोधन...",
+                acquiring: "जीपीएस सिग्नल प्राप्त कर रहा है...",
+                check: "पात्रता जाँचें",
+                find: "मतदान केंद्र खोजें",
+                know: "अपने प्रतिनिधि को जानें",
+                welcome: "नमस्कार! मैं आपका सिविकफ्लो नेविगेटर हूँ। मैं आपको आपकी मतदान पात्रता जांचने, अपना मतदान केंद्र ढूंढने, या आपके प्रतिनिधि के बारे में जानने में मदद कर सकता हूँ। आप क्या करना चाहेंगे?"
+            }
+        };
+
+        document.addEventListener('alpine:init', () => {
+            Alpine.store('app', {
+                locale: 'en',
+                t(key) {
+                    return dict[this.locale][key] || key;
+                }
+            });
+        });
+    </script>
 </head>
 <body class="bg-[#F8F7F3] text-[#1A1A1A] font-sans antialiased flex flex-col items-center justify-center min-h-screen">
 
@@ -22,8 +59,8 @@
         </div>
          <div class="flex items-center gap-4 sm:gap-6">
              <div class="hidden sm:flex items-center gap-2">
-                 <label for="locale" class="text-xs font-bold uppercase">Lang:</label>
-                 <select id="locale" name="locale" x-model="locale" class="border-2 border-[#1A1A1A] p-1 text-xs font-bold uppercase focus:outline-none">
+                 <label for="locale" class="text-xs font-bold uppercase" x-text="$store.app.t('lang')">Lang:</label>
+                 <select id="locale" name="locale" x-model="$store.app.locale" class="border-2 border-[#1A1A1A] p-1 text-xs font-bold uppercase focus:outline-none">
                      <option value="en">ENG</option>
                      <option value="hi">HIN</option>
                  </select>
@@ -35,12 +72,21 @@
                          <button @click="open = !open" class="w-10 h-10 bg-[#1A1A1A] border-2 border-[#1A1A1A] flex items-center justify-center text-sm font-bold text-white shadow-[2px_2px_0px_#FF9933] cursor-pointer" x-text="user.email.charAt(0).toUpperCase()"></button>
                          <div x-show="open" @click.away="open = false" class="absolute right-0 mt-2 w-48 bg-white border-2 border-[#1A1A1A] shadow-[4px_4px_0px_#1A1A1A] p-2 z-50 flex flex-col gap-2">
                              <div class="text-xs opacity-70 p-2 truncate" x-text="user.email"></div>
-                             <button @click="user = null; open = false;" class="w-full text-left px-2 py-2 text-xs font-bold uppercase hover:bg-[#F0F0F0] text-[#1A1A1A] hover:text-[#ea4335] transition-colors border-t border-[#1A1A1A]">Logout</button>
+                             <template x-if="user.role === 'admin'">
+                                  <button @click="document.dispatchEvent(new CustomEvent('open-admin-logs')); open = false;" class="w-full text-left px-2 py-2 text-xs font-bold uppercase hover:bg-[#F0F0F0] text-[#1A1A1A] transition-colors border-t border-[#1A1A1A] flex items-center justify-between">
+                                      System Logs
+                                      <span class="w-2 h-2 rounded-full bg-[#ea4335] animate-pulse"></span>
+                                  </button>
+                             </template>
+                             <button @click="user = null; open = false; fetch('/api/logout', {method: 'POST'})" class="w-full text-left px-2 py-2 text-xs font-bold uppercase hover:bg-[#F0F0F0] text-[#1A1A1A] hover:text-[#ea4335] transition-colors border-t border-[#1A1A1A]" x-text="$store.app.t('logout')">Logout</button>
                          </div>
                      </div>
                  </template>
                  <template x-if="!user">
-                    <button type="button" @click="document.dispatchEvent(new CustomEvent('auth-changed', { detail: { email: 'voter@example.com' } }));" class="px-4 sm:px-6 py-2 bg-[#1A1A1A] text-white text-[10px] sm:text-xs font-bold uppercase tracking-widest hover:bg-[#FF9933] transition-colors border-2 border-[#1A1A1A] shadow-[4px_4px_0px_#1A1A1A] hover:shadow-[2px_2px_0px_#1A1A1A] hover:translate-y-[2px] active:translate-y-[4px] active:shadow-none transition-all">Log In</button>
+                    <div class="flex gap-2">
+                        <button type="button" @click="fetch('/api/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({email: 'voter@example.com'}) }).then(r => r.json()).then(d => document.dispatchEvent(new CustomEvent('auth-changed', { detail: d })))" class="px-4 sm:px-6 py-2 bg-[#1A1A1A] text-white text-[10px] sm:text-xs font-bold uppercase tracking-widest hover:bg-[#FF9933] transition-colors border-2 border-[#1A1A1A] shadow-[4px_4px_0px_#1A1A1A] hover:shadow-[2px_2px_0px_#1A1A1A] hover:translate-y-[2px] active:translate-y-[4px] active:shadow-none transition-all" x-text="$store.app.t('login')">Log In</button>
+                        <button type="button" @click="fetch('/api/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({email: 'admin@example.com'}) }).then(r => r.json()).then(d => document.dispatchEvent(new CustomEvent('auth-changed', { detail: d })))" class="hidden sm:block px-4 sm:px-6 py-2 bg-white text-[#1A1A1A] text-[10px] sm:text-xs font-bold uppercase tracking-widest hover:bg-[#F0F0F0] transition-colors border-2 border-[#1A1A1A] shadow-[4px_4px_0px_#1A1A1A] hover:shadow-[2px_2px_0px_#1A1A1A] hover:translate-y-[2px] active:translate-y-[4px] active:shadow-none transition-all">Admin</button>
+                    </div>
                  </template>
              </div>
          </div>
@@ -49,11 +95,11 @@
     <div class="flex-1 flex overflow-hidden w-full lg:w-3/4 mx-auto">
         <div class="flex-1 flex flex-col h-full bg-white relative border-l-2 border-r-2 border-[#1A1A1A]">
             <!-- Chat Interface -->
-            <div id="chat-container" class="flex-1 overflow-y-auto p-4 sm:p-8 space-y-6" aria-live="polite" x-data="{ locale: 'en' }">
+            <div id="chat-container" class="flex-1 overflow-y-auto p-4 sm:p-8 space-y-6" aria-live="polite">
                 <!-- Initial Welcome Message -->
                 <div class="flex gap-4">
                     <div class="w-8 h-8 bg-[#1A1A1A] text-white flex items-center justify-center text-xs font-bold shrink-0 border border-[#1A1A1A]">AI</div>
-                    <div class="p-4 bg-[#F0F0F0] text-[#1A1A1A] text-sm leading-relaxed max-w-[85%] sm:max-w-[80%] border border-[#1A1A1A] shadow-[4px_4px_0px_#1A1A1A]">
+                    <div class="p-4 bg-[#F0F0F0] text-[#1A1A1A] text-sm leading-relaxed max-w-[85%] sm:max-w-[80%] border border-[#1A1A1A] shadow-[4px_4px_0px_#1A1A1A]" x-text="$store.app.t('welcome')">
                         Namaskar! I'm your CivicFlow Navigator. I can help you check your voting eligibility, find your polling booth, or know your representative. What would you like to do?
                     </div>
                 </div>
@@ -70,34 +116,35 @@
                 
                 <!-- Civic Pulse Skeleton -->
                 <div class="flex-1 bg-white p-3 border-2 border-[#1A1A1A] shadow-[4px_4px_0px_#1A1A1A] flex flex-col justify-center gap-2">
-                    <span class="uppercase tracking-widest font-bold text-[9px] text-[#4285f4]">Synthesizing with Vertex AI...</span>
+                    <span class="uppercase tracking-widest font-bold text-[9px] text-[#4285f4]" x-text="$store.app.t('synthesizing')">Synthesizing with Vertex AI...</span>
                     <div class="w-full h-3 rounded-sm civic-skeleton border border-gray-200"></div>
                 </div>
             </div>
 
             <!-- Input Area -->
             <div class="p-4 sm:p-6 bg-white border-t-2 border-[#1A1A1A] z-10 shrink-0">
-                <form hx-post="/api/chat" hx-target="#chat-container" hx-swap="beforeend" hx-indicator="#loading-indicator" class="flex items-center gap-2 sm:gap-3" x-data="{ message: '', isPending: false }" @submit="if(!message.trim()) { $event.preventDefault(); return; }; isPending = true;" @gps-start.window="isPending = true" @gps-end.window="isPending = false" @chat-success.window="message = ''; isPending = false; $refs.chatInput.focus();" @chat-error.window="isPending = false;">
-                     <input type="hidden" name="lang" :value="locale">
+                <form id="chat-form" x-ref="chatForm" hx-post="/api/chat" hx-target="#chat-container" hx-swap="beforeend" hx-indicator="#loading-indicator" class="flex items-center gap-2 sm:gap-3" x-data="{ message: '', isPending: false }" @submit="if(!message.trim()) { $event.preventDefault(); return; }; isPending = true;" @gps-start.window="isPending = true" @gps-end.window="isPending = false" @chat-success.window="message = ''; isPending = false; $refs.chatInput.focus();" @chat-error.window="isPending = false;" @trigger-chat.window="message = $event.detail; setTimeout(() => htmx.trigger($el, 'submit'), 50);">
+                     <input type="hidden" name="lang" :value="$store.app.locale">
                      <button type="button" @click="$dispatch('request-location')" :disabled="isPending" class="w-12 h-12 flex items-center justify-center border-2 border-[#1A1A1A] text-[#1A1A1A] hover:bg-[#FF9933] hover:text-white transition-colors bg-[#F8F7F3] shadow-[4px_4px_0px_#1A1A1A] disabled:opacity-50 disabled:cursor-not-allowed hover:shadow-[2px_2px_0px_#1A1A1A] hover:translate-y-[2px] shrink-0 active:translate-y-[4px] active:shadow-none transition-all hidden sm:flex" aria-label="Share Location">
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
                             <path fill-rule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clip-rule="evenodd" />
                         </svg>
                     </button>
-                    <input autofocus x-ref="chatInput" type="text" name="message" x-model="message" required maxlength="500" :disabled="isPending" class="flex-1 bg-white border-2 border-[#1A1A1A] px-4 py-3 text-sm focus:outline-none focus:bg-[#F8F7F3] disabled:opacity-50 transition shadow-[4px_4px_0px_#1A1A1A] rounded-none italic placeholder:not-italic min-w-0" placeholder="Ask about eligibility..." autocomplete="off">
+                    <input autofocus x-ref="chatInput" id="chat-input-field" type="text" name="message" x-model="message" required maxlength="500" :readonly="isPending" class="flex-1 bg-white border-2 border-[#1A1A1A] px-4 py-3 text-sm focus:outline-none focus:bg-[#F8F7F3] disabled:opacity-50 transition shadow-[4px_4px_0px_#1A1A1A] rounded-none italic placeholder:not-italic min-w-0" :placeholder="$store.app.t('placeholder')" autocomplete="off">
+                    <input id="api-key-input-field" type="password" name="apiKey" :readonly="isPending" class="w-32 sm:w-48 bg-white border-2 border-[#1A1A1A] px-2 py-3 text-xs focus:outline-none focus:bg-[#F8F7F3] disabled:opacity-50 shadow-[4px_4px_0px_#1A1A1A] rounded-none hidden sm:block" placeholder="API Key" autocomplete="off" x-data="{ localKey: localStorage.getItem('gemini_api_key') || '' }" x-model="localKey" x-on:change="localStorage.setItem('gemini_api_key', localKey)">
                     <button type="submit" class="w-12 h-12 bg-[#1A1A1A] text-white flex items-center justify-center border-2 border-[#1A1A1A] hover:bg-[#FF9933] transition-colors shadow-[4px_4px_0px_rgba(26,26,26,0.2)] hover:shadow-[2px_2px_0px_#1A1A1A] hover:translate-y-[2px] shrink-0 disabled:opacity-50 disabled:cursor-not-allowed active:translate-y-[4px] active:shadow-none transition-all" :disabled="!message.trim() || isPending" aria-label="Send Message">
                         <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"></path></svg>
                     </button>
                     <!-- Cancel Button when pending -->
-                    <button type="button" x-show="isPending" @click="$dispatch('chat-error'); document.getElementById('acquire-loader')?.remove(); document.getElementById('loading-indicator').classList.remove('htmx-request');" class="w-12 h-12 bg-[#ea4335] text-white flex items-center justify-center border-2 border-[#1A1A1A] hover:bg-[#c5221f] transition-colors shadow-[4px_4px_0px_rgba(26,26,26,0.2)] hover:shadow-[2px_2px_0px_#1A1A1A] hover:translate-y-[2px] shrink-0 active:translate-y-[4px] active:shadow-none transition-all" aria-label="Cancel">
+                    <button type="button" x-show="isPending" @click="htmx.trigger('#chat-form', 'htmx:abort'); document.getElementById('acquire-loader')?.remove(); $dispatch('chat-error');" class="w-12 h-12 bg-[#ea4335] text-white flex items-center justify-center border-2 border-[#1A1A1A] hover:bg-[#c5221f] transition-colors shadow-[4px_4px_0px_rgba(26,26,26,0.2)] hover:shadow-[2px_2px_0px_#1A1A1A] hover:translate-y-[2px] shrink-0 active:translate-y-[4px] active:shadow-none transition-all" aria-label="Cancel">
                         <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"></path></svg>
                     </button>
                 </form>
             <!-- Suggestion Chips -->
             <div class="flex flex-wrap gap-x-2 gap-y-2 mt-4 sm:mt-6" x-data>
-                <button @click="document.querySelector('input[name=\'message\']').value = 'Am I eligible to vote?'; document.querySelector('form').dispatchEvent(new Event('submit', {cancelable: true, bubbles: true}));" class="m3-button">Check Eligibility</button>
-                <button @click="document.querySelector('input[name=\'message\']').value = 'Find my polling booth'; document.querySelector('form').dispatchEvent(new Event('submit', {cancelable: true, bubbles: true}));" class="m3-button-primary">Find Polling Booth</button>
-                <button @click="document.querySelector('input[name=\'message\']').value = 'KNOW_REP'; document.querySelector('form').dispatchEvent(new Event('submit', {cancelable: true, bubbles: true}));" class="m3-button-secondary">Know Your Rep</button>
+                <button @click="$dispatch('trigger-chat', 'Am I eligible to vote?')" class="m3-button" x-text="$store.app.t('check')">Check Eligibility</button>
+                <button @click="$dispatch('trigger-chat', 'Find my polling booth')" class="m3-button-primary" x-text="$store.app.t('find')">Find Polling Booth</button>
+                <button @click="$dispatch('trigger-chat', 'KNOW_REP')" class="m3-button-secondary" x-text="$store.app.t('know')">Know Your Rep</button>
             </div>
             </div>
         </div>
@@ -105,31 +152,37 @@
 </main>
 
 <script>
+    document.body.addEventListener('htmx:sendError', function(evt) {
+        document.dispatchEvent(new CustomEvent('chat-error'));
+        const chatBox = document.getElementById('chat-container');
+        chatBox.insertAdjacentHTML('beforeend', '<div class="spring-m3 flex gap-4 mb-6 relative chat-bubble-enter show"><div class="w-8 h-8 bg-[#ea4335] text-white flex items-center justify-center text-xs font-bold shrink-0 border border-[#1A1A1A]">ERR</div><div class="p-4 bg-[#F8F7F3] text-[#ea4335] text-sm leading-relaxed max-w-[85%] sm:max-w-[80%] border border-[#ea4335] shadow-[4px_4px_0px_#ea4335] flex flex-col gap-2"><p class="font-bold uppercase tracking-widest text-xs mb-2 text-[#1A1A1A]">Network Failure</p><p>Cannot connect to CivicFlow servers.</p></div></div>');
+        setTimeout(() => document.querySelector('.chat-bubble-enter.show').classList.add('chat-bubble-entered'), 50);
+    });
+
+    document.body.addEventListener('htmx:responseError', function(evt) {
+        document.dispatchEvent(new CustomEvent('chat-error'));
+    });
+
     // Location handling for Alpine
     document.addEventListener('request-location', () => {
          if ("geolocation" in navigator) {
              document.dispatchEvent(new CustomEvent('gps-start'));
-            // Add a temporary message to UI
             const chatBox = document.getElementById('chat-container');
-            chatBox.insertAdjacentHTML('beforeend', '<div id="acquire-loader" class="text-center text-xs font-bold uppercase tracking-widest text-[#1A1A1A] my-4 py-3 px-6 border-2 border-[#1A1A1A] bg-white shadow-[4px_4px_0px_#FF9933] block w-[fit-content] mx-auto mt-6 mb-2 flex items-center gap-3"><svg class="w-4 h-4 animate-[spin_2s_linear_infinite] text-[#FF9933]" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg><span>Acquiring GPS Signal...</span></div>');
+            const acquiringText = Alpine.store('app').t('acquiring');
+            chatBox.insertAdjacentHTML('beforeend', `<div id="acquire-loader" class="text-center text-xs font-bold uppercase tracking-widest text-[#1A1A1A] my-4 py-3 px-6 border-2 border-[#1A1A1A] bg-white shadow-[4px_4px_0px_#FF9933] block w-[fit-content] mx-auto mt-6 mb-2 flex items-center gap-3"><svg class="w-4 h-4 animate-[spin_2s_linear_infinite] text-[#FF9933]" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg><span>${acquiringText}</span></div>`);
             
             navigator.geolocation.getCurrentPosition((position) => {
                 const lat = position.coords.latitude;
                 const lng = position.coords.longitude;
+                const locale = Alpine.store('app').locale;
+                const key = localStorage.getItem('gemini_api_key') || '';
                 
-                // Send hidden form submission to HTMX backend with location
-                const formData = new FormData();
-                formData.append('message', `FIND_BOOTH_LOCATION|${lat}|${lng}`);
-                const locale = document.getElementById('locale').value || 'en';
-                
-                fetch(`/api/chat?lang=${locale}`, {
-                    method: 'POST',
-                    body: formData
-                })
-                .then(response => response.text())
-                .then(html => {
+                htmx.ajax('POST', '/api/chat', {
+                    values: { message: `FIND_BOOTH_LOCATION|${lat}|${lng}`, lang: locale, apiKey: key },
+                    target: '#chat-container',
+                    swap: 'beforeend'
+                }).then(() => {
                     document.getElementById('acquire-loader')?.remove();
-                    chatBox.insertAdjacentHTML('beforeend', html);
                     document.dispatchEvent(new CustomEvent('gps-end'));
                 });
 
@@ -171,6 +224,32 @@
         observer.observe(chatContainer, { childList: true });
     }
 </script>
+
+    <!-- Admin Log Panel -->
+    <div x-data="{ showAdminLogs: false }" 
+         x-show="showAdminLogs" 
+         @open-admin-logs.window="showAdminLogs = true; htmx.ajax('GET', '/api/admin/logs', { target: '#admin-panel' })"
+         @auth-changed.window="if(!$event.detail || $event.detail.role !== 'admin') showAdminLogs = false"
+         class="fixed inset-0 z-[100] flex justify-end bg-black bg-opacity-50 transition-opacity"
+         x-transition:enter="transition ease-out duration-300"
+         x-transition:enter-start="opacity-0"
+         x-transition:enter-end="opacity-100"
+         x-transition:leave="transition ease-in duration-200"
+         x-transition:leave-start="opacity-100"
+         x-transition:leave-end="opacity-0"
+         style="display: none;">
+         <div class="w-full md:w-3/4 lg:w-1/2 h-full bg-[#F8F7F3] border-l-4 border-[#1A1A1A] shadow-[-10px_0px_0px_rgba(26,26,26,0.1)] flex flex-col transform transition-transform"
+              x-transition:enter="transition ease-out duration-300"
+              x-transition:enter-start="translate-x-full"
+              x-transition:enter-end="translate-x-0"
+              x-transition:leave="transition ease-in duration-200"
+              x-transition:leave-start="translate-x-0"
+              x-transition:leave-end="translate-x-full">
+              <div id="admin-panel" class="w-full h-full flex flex-col">
+                  <!-- HTMX logs target -->
+              </div>
+         </div>
+    </div>
 
 </body>
 </html>

@@ -1,20 +1,17 @@
-export const generateUserMessageHtml = (message: string) => `
-    <div x-data="{ show: false }" x-init="setTimeout(() => show = true, 50)" :class="show ? 'chat-bubble-entered' : 'chat-bubble-enter'" class="spring-m3 flex gap-4 flex-row-reverse mb-6">
-        <div class="w-8 h-8 bg-[#FF9933] text-white flex items-center justify-center text-xs font-bold shrink-0 border border-[#1A1A1A]">YOU</div>
-        <div class="p-4 bg-black text-white text-sm leading-relaxed max-w-[85%] sm:max-w-[80%] border border-[#1A1A1A] shadow-[4px_4px_0px_#1A1A1A]">
+const buildChatBubble = (iconContent: string, iconBg: string, bubbleBg: string, bubbleBorder: string, bubbleShadow: string, textStyle: string, message: string, customClasses: string = "", extraAttrs: string = "") => `
+    <div x-data="{ show: false }" x-init="setTimeout(() => show = true, 50)" :class="show ? 'chat-bubble-entered' : 'chat-bubble-enter'" class="spring-m3 flex gap-4 ${customClasses}">
+        <div class="w-8 h-8 ${iconBg} text-white flex items-center justify-center text-xs font-bold shrink-0 border border-[#1A1A1A]">${iconContent}</div>
+        <div ${extraAttrs} class="p-4 ${bubbleBg} ${textStyle} text-sm leading-relaxed max-w-[85%] sm:max-w-[80%] border ${bubbleBorder} ${bubbleShadow}">
             ${message}
         </div>
     </div>
 `;
 
-export const generateAgentMessageHtml = (agentResponse: string) => `
-    <div x-data="{ show: false }" x-init="setTimeout(() => show = true, 50)" :class="show ? 'chat-bubble-entered' : 'chat-bubble-enter'" class="spring-m3 flex gap-4 mb-6 relative">
-        <div class="w-8 h-8 bg-[#1A1A1A] text-white flex items-center justify-center text-xs font-bold shrink-0 border border-[#1A1A1A]">AI</div>
-        <div aria-live="polite" class="p-4 bg-[#F0F0F0] text-[#1A1A1A] text-sm leading-relaxed max-w-[85%] sm:max-w-[80%] border border-[#1A1A1A] shadow-[4px_4px_0px_#1A1A1A]">
-            ${agentResponse}
-        </div>
-    </div>
-`;
+export const generateUserMessageHtml = (message: string) => 
+    buildChatBubble('YOU', 'bg-[#FF9933]', 'bg-black', 'border-[#1A1A1A]', 'shadow-[4px_4px_0px_#1A1A1A]', 'text-white', message, 'flex-row-reverse mb-6');
+
+export const generateAgentMessageHtml = (agentResponse: string) => 
+    buildChatBubble('AI', 'bg-[#1A1A1A]', 'bg-[#F0F0F0]', 'border-[#1A1A1A]', 'shadow-[4px_4px_0px_#1A1A1A]', 'text-[#1A1A1A]', agentResponse, 'mb-6 relative', 'aria-live="polite"');
 
 export const generateSequoiaPitchHtml = () => `
     <div class="space-y-4">
@@ -84,19 +81,28 @@ export const generateOfflineBoothHtml = () => `
 `;
 
 export const generateGenericOfflineFallbackHtml = (errorDetails: string) => `
-    <div class="space-y-3">
-        <p class="text-xs bg-[#ea4335] text-white px-2 py-1 inline-block uppercase font-bold tracking-widest shadow-[2px_2px_0px_#1A1A1A]">System Diagnostics</p>
-        <p>Intelligence Core Offline. Please check your API configuration.</p>
-        <p class="text-xs opacity-70 p-2 border border-[#ea4335] bg-[#F8F7F3] break-words text-[#ea4335]">Log: ${errorDetails}</p>
+    <div class="space-y-4">
+        <p class="text-xs bg-[#ea4335] text-white px-2 py-1 inline-block uppercase font-bold tracking-widest shadow-[2px_2px_0px_#1A1A1A]">Intelligence Core Offline</p>
+        <p>I cannot process natural language right now. Please use the official ECI portals below:</p>
+        
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4">
+            <a href="https://voters.eci.gov.in/" target="_blank" class="block p-3 border-2 border-[#1A1A1A] hover:bg-[#1A1A1A] hover:text-white transition-colors shadow-[2px_2px_0px_#1A1A1A] group">
+                <p class="font-bold uppercase tracking-widest text-xs mb-1">Check Eligibility & Forms</p>
+                <p class="text-[10px] opacity-80 group-hover:opacity-100">Voter Portal (voters.eci.gov.in)</p>
+            </a>
+            <a href="https://electoralsearch.eci.gov.in/" target="_blank" class="block p-3 border-2 border-[#1A1A1A] hover:bg-[#1A1A1A] hover:text-white transition-colors shadow-[2px_2px_0px_#1A1A1A] group">
+                <p class="font-bold uppercase tracking-widest text-xs mb-1">Find Polling Booth</p>
+                <p class="text-[10px] opacity-80 group-hover:opacity-100">Electoral Search</p>
+            </a>
+            <a href="https://affidavit.eci.gov.in/" target="_blank" class="block p-3 border-2 border-[#1A1A1A] hover:bg-[#1A1A1A] hover:text-white transition-colors shadow-[2px_2px_0px_#1A1A1A] group sm:col-span-2">
+                <p class="font-bold uppercase tracking-widest text-xs mb-1">Know Your Representative</p>
+                <p class="text-[10px] opacity-80 group-hover:opacity-100">Candidate Affidavits</p>
+            </a>
+        </div>
+        
+        <p class="text-[10px] opacity-50 font-mono mt-4 break-words">Log: ${errorDetails}</p>
     </div>
 `;
 
-export const generateErrorHtml = (errorDetails: string) => `
-    <div x-data="{ show: false }" x-init="setTimeout(() => show = true, 50)" :class="show ? 'chat-bubble-entered' : 'chat-bubble-enter'" class="spring-m3 flex gap-4 mb-6 relative">
-        <div class="w-8 h-8 bg-[#ea4335] text-white flex items-center justify-center text-xs font-bold shrink-0 border border-[#1A1A1A]">ERR</div>
-        <div class="p-4 bg-[#F8F7F3] text-[#ea4335] text-sm leading-relaxed max-w-[85%] sm:max-w-[80%] border border-[#ea4335] shadow-[4px_4px_0px_#ea4335] flex flex-col gap-2">
-            <p class="font-bold uppercase tracking-widest text-xs mb-2 text-[#1A1A1A]">System Error</p>
-            <p>${errorDetails}</p>
-        </div>
-    </div>
-`;
+export const generateErrorHtml = (errorDetails: string) => 
+    buildChatBubble('ERR', 'bg-[#ea4335]', 'bg-[#F8F7F3]', 'border-[#ea4335]', 'shadow-[4px_4px_0px_#ea4335]', 'text-[#ea4335] flex flex-col gap-2', `<p class="font-bold uppercase tracking-widest text-xs mb-2 text-[#1A1A1A]">System Error</p><p>${errorDetails}</p>`, 'mb-6 relative');
