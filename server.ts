@@ -1,7 +1,18 @@
 import express from 'express';
+
+declare module 'express-session' {
+  interface SessionData {
+    userId: number;
+    email: string;
+    role: string;
+    chatHistory: any[];
+  }
+}
+
 import dotenv from 'dotenv';
 import path from 'path';
 import multer from 'multer';
+import cookieParser from 'cookie-parser';
 import pino from 'pino';
 import cors from 'cors';
 import session from 'express-session';
@@ -11,32 +22,24 @@ import fs from 'fs';
 import readline from 'readline';
 import bcrypt from 'bcrypt';
 import helmet from 'helmet';
-
-import { handleChat } from './src/chatHandler.js';
 import rateLimit from 'express-rate-limit';
 import DOMPurify from 'isomorphic-dompurify';
-import { generateUserMessageHtml, generateAgentMessageHtml, generateErrorHtml } from './src/uiTemplates.js';
-import { SYSTEM_CONSTANTS } from './src/constants.js';
-
 import crypto from 'crypto';
+import csurf from 'csurf';
 
-
+import { handleChat } from './src/chatHandler.js';
+import { generateErrorHtml } from './src/uiTemplates.js';
 import { validateEnv } from './src/utils/validateEnv.js';
+import { createApiRouter } from './src/routes/api.js';
 
 dotenv.config();
-
 validateEnv();
 
-if (!process.env.GEMINI_API_KEY) {
-    console.error("WARNING: GEMINI_API_KEY is not set.");
+if (process.env.NODE_ENV === 'production' && !process.env.SESSION_SECRET) {
+    throw new Error("SESSION_SECRET must be set in production.");
 }
 
-let sessionSecret = process.env.SESSION_SECRET;
-if (!sessionSecret || sessionSecret === 'civic-flow-fallback-secret') {
-    console.warn("WARNING: SESSION_SECRET is not set. Using a generic dev secret.");
-    sessionSecret = crypto.randomBytes(32).toString('hex');
-}
-
+const sessionSecret = process.env.SESSION_SECRET || 'dev-secret-only';
 const logger = pino({
     transport: {
         targets: [
@@ -54,30 +57,52 @@ app.use(helmet({
     contentSecurityPolicy: {
         directives: {
             "frame-ancestors": ["*"],
+            "script-src": ["'self'", "'unsafe-eval'"],
         },
     },
 }));
 app.set('trust proxy', 1);
 
-import { createApiRouter } from './src/routes/api.js';
-
-// ... (other imports)
-
-// The API router should be defined AFTER its dependencies (db, logger, upload, chatLimiter, csrfProtection)
-// are initialized. See these definitions below.
-
-// ...
-
-declare module 'express-session' {
-  interface SessionData {
-    userId: number;
-    email: string;
-    role: string;
-    chatHistory: any[];
-  }
-}
-
 const SQLiteStore = connectSqlite3(session);
+const db = new Database('data.db');
+db.exec(`
+    CREATE TABLE IF NOT EXISTS users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        email TEXT UNIQUE,
+        password TEXT,
+        epic_number TEXT,
+        state TEXT,
+        constituency TEXT
+    );
+    CREATE TABLE IF NOT EXISTS votes (
+        user_id INTEGER UNIQUE,
+        FOREIGN KEY(user_id) REFERENCES users(id)
+    );
+    CREATE TABLE IF NOT EXISTS chat_sessions (
+        user_id INTEGER PRIMARY KEY,
+        history TEXT,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE TABLE IF NOT EXISTS constituencies (
+        id INTEGER PRIMARY KEY,
+        name TEXT UNIQUE
+    );
+    CREATE TABLE IF NOT EXISTS candidates (
+        id INTEGER PRIMARY KEY,
+        name TEXT,
+        constituency_id INTEGER,
+        incumbent INTEGER,
+        FOREIGN KEY(constituency_id) REFERENCES constituencies(id)
+    );
+    CREATE TABLE IF NOT EXISTS notifications (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        message TEXT NOT NULL,
+        is_read BOOLEAN DEFAULT 0,
+        createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY(user_id) REFERENCES users(id)
+    );
+`);
 
 app.use(session({
     store: new SQLiteStore({ dir: './', db: 'data.db', table: 'sessions', concurrentDB: 'true' as any } as any) as any,
@@ -90,56 +115,33 @@ app.use(session({
         sameSite: 'lax' 
     }
 }));
-const db = new Database('data.db');
-db.exec(`
-    CREATE TABLE IF NOT EXISTS users (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        email TEXT UNIQUE NOT NULL,
-        password_hash TEXT NOT NULL,
-        role TEXT DEFAULT 'voter',
-        epic_number TEXT,
-        state TEXT,
-        constituency TEXT,
-        language_preference TEXT DEFAULT 'en'
-    );
-    CREATE TABLE IF NOT EXISTS votes (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER NOT NULL,
-        election_id TEXT DEFAULT 'general_2026',
-        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-        UNIQUE(user_id, election_id),
-        FOREIGN KEY(user_id) REFERENCES users(id)
-    );
-    CREATE TABLE IF NOT EXISTS chat_sessions (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER NOT NULL,
-        history TEXT,
-        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY(user_id) REFERENCES users(id)
-    );
-    CREATE TABLE IF NOT EXISTS notifications (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER NOT NULL,
-        message TEXT NOT NULL,
-        is_read BOOLEAN DEFAULT 0,
-        createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY(user_id) REFERENCES users(id)
-    );
-    CREATE TABLE IF NOT EXISTS constituencies (
-        id INTEGER PRIMARY KEY,
-        state TEXT,
-        name TEXT,
-        type TEXT
-    );
-    CREATE TABLE IF NOT EXISTS candidates (
-        id INTEGER PRIMARY KEY,
-        constituency_id INTEGER,
-        name TEXT,
-        party TEXT,
-        incumbent BOOLEAN,
-        FOREIGN KEY(constituency_id) REFERENCES constituencies(id)
-    );
-`);
+
+const chatLimiter = rateLimit({
+    windowMs: 1 * 60 * 1000,
+    max: 15,
+    keyGenerator: (req) => {
+        return (req as any).sessionID || req.ip || 'unknown';
+    },
+    handler: (req, res) => {
+        res.status(429).send(generateErrorHtml("Too many requests, please try again after a minute."));
+    },
+    standardHeaders: true,
+    legacyHeaders: false,
+});
+
+app.use(express.static(path.join(process.cwd(), 'public')));
+app.use(express.json({ limit: '100kb' }));
+app.use(express.urlencoded({ limit: '100kb', extended: true }));
+app.use(cookieParser());
+
+const csrfProtection = csurf({ cookie: { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax' } });
+
+const apiRouter = createApiRouter(db, logger, upload, chatLimiter, csrfProtection);
+app.use('/api', apiRouter);
+
+// ...
+
+
 
 // Mock Data Ingestion Pipeline
 try {
@@ -157,31 +159,6 @@ try {
         logger.info("Mock election dataset ingested.");
     }
 } catch(e) {}
-
-const chatLimiter = rateLimit({
-    windowMs: 1 * 60 * 1000,
-    max: 15,
-    keyGenerator: (req) => {
-        // Enforce throttling by session ID to protect shared network users
-        return req.sessionID || req.ip || 'unknown';
-    },
-    handler: (req, res) => {
-        res.status(429).send(generateErrorHtml("Too many requests, please try again after a minute."));
-    },
-    standardHeaders: true,
-    legacyHeaders: false,
-});
-
-import csurf from 'csurf';
-
-app.use(express.static(path.join(process.cwd(), 'public')));
-app.use(express.json({ limit: '100kb' }));
-app.use(express.urlencoded({ limit: '100kb', extended: true }));
-
-const csrfProtection = csurf({ cookie: { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax' } });
-
-const apiRouter = createApiRouter(db, logger, upload, chatLimiter, csrfProtection);
-app.use('/api', apiRouter);
 
 app.get('/api/health', (req, res) => {
   try {
