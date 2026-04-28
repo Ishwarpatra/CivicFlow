@@ -162,10 +162,11 @@ const chatLimiter = rateLimit({
     windowMs: 1 * 60 * 1000,
     max: 15,
     keyGenerator: (req) => {
-        return req.session?.userId ? req.session.userId.toString() : (req.ip || 'unknown');
+        // Enforce throttling by session ID to protect shared network users
+        return req.sessionID || req.ip || 'unknown';
     },
     handler: (req, res) => {
-        res.status(429).send(generateErrorHtml("Too many requests from this IP, please try again after a minute."));
+        res.status(429).send(generateErrorHtml("Too many requests, please try again after a minute."));
     },
     standardHeaders: true,
     legacyHeaders: false,

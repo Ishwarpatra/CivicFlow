@@ -16,7 +16,7 @@
                 login: "Log In",
                 logout: "Logout",
                 placeholder: "Ask about eligibility...",
-                synthesizing: "Synthesizing with Vertex AI...",
+                synthesizing: "Analyzing civic data...",
                 acquiring: "Acquiring GPS Signal...",
                 check: "Check Eligibility",
                 find: "Find Polling Booth",
@@ -28,7 +28,7 @@
                 login: "लॉग इन",
                 logout: "लॉग आउट",
                 placeholder: "पात्रता के बारे में पूछें...",
-                synthesizing: "वरटेक्स एआई के साथ विचार संसोधन...",
+                synthesizing: "नागरिक डेटा का विश्लेषण कर रहा है...",
                 acquiring: "जीपीएस सिग्नल प्राप्त कर रहा है...",
                 check: "पात्रता जाँचें",
                 find: "मतदान केंद्र खोजें",
@@ -116,7 +116,7 @@
                                           <span class="w-2 h-2 rounded-full bg-[#ea4335] animate-pulse"></span>
                                       </button>
                                  </template>
-                                 <button @click="user = null; open = false; fetch('/api/logout', {method: 'POST', headers: { 'CSRF-Token': $store.app.csrfToken }})" class="w-full text-left px-2 py-2 text-xs font-bold uppercase hover:bg-[#F0F0F0] text-[#1A1A1A] hover:text-[#ea4335] transition-colors border-t border-[#1A1A1A]" x-text="$store.app.t('logout')">Logout</button>
+                                 <button @click="open = false; fetch('/api/auth/logout', {method: 'POST', headers: { 'CSRF-Token': $store.app.csrfToken }}).then(r => { if(r.ok) { user = null; document.dispatchEvent(new CustomEvent('auth-changed', {detail: null})); } })" class="w-full text-left px-2 py-2 text-xs font-bold uppercase hover:bg-[#F0F0F0] text-[#1A1A1A] hover:text-[#ea4335] transition-colors border-t border-[#1A1A1A]" x-text="$store.app.t('logout')">Logout</button>
                              </div>
                          </div>
                          
@@ -197,7 +197,7 @@
 
             <!-- Input Area -->
             <div class="p-4 sm:p-6 bg-white border-t-2 border-[#1A1A1A] z-10 shrink-0">
-                <form id="chat-form" x-ref="chatForm" hx-post="/api/chat" hx-target="#chat-container" hx-swap="beforeend" hx-indicator="#loading-indicator" class="flex items-center gap-2 sm:gap-3" x-data="{ message: '', isPending: false }" @submit="if(!message.trim()) { $event.preventDefault(); return; }; isPending = true;" @gps-start.window="isPending = true" @gps-end.window="isPending = false" @chat-success.window="message = ''; isPending = false; $refs.chatInput.focus();" @chat-error.window="isPending = false;" @trigger-chat.window="message = $event.detail; setTimeout(() => htmx.trigger($el, 'submit'), 50);">
+                <form id="chat-form" x-ref="chatForm" hx-post="/api/chat" hx-target="#chat-container" hx-swap="beforeend" hx-indicator="#loading-indicator" class="flex items-center gap-2 sm:gap-3" x-data="{ message: '', isPending: false }" @submit="if(!message.trim() || isPending) { $event.preventDefault(); return; }; isPending = true;" @gps-start.window="isPending = true" @gps-end.window="isPending = false" @chat-success.window="message = ''; isPending = false; $refs.chatInput.focus();" @chat-error.window="isPending = false;" @trigger-chat.window="message = $event.detail; setTimeout(() => htmx.trigger($el, 'submit'), 50);">
                      <input type="hidden" name="lang" :value="$store.app.locale">
                      <button type="button" @click="$dispatch('request-location')" :disabled="isPending" class="w-12 h-12 flex items-center justify-center border-2 border-[#1A1A1A] text-[#1A1A1A] hover:bg-[#FF9933] hover:text-white transition-colors bg-[#F8F7F3] shadow-[4px_4px_0px_#1A1A1A] disabled:opacity-50 disabled:cursor-not-allowed hover:shadow-[2px_2px_0px_#1A1A1A] hover:translate-y-[2px] shrink-0 active:translate-y-[4px] active:shadow-none transition-all hidden sm:flex" aria-label="Share Location">
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">

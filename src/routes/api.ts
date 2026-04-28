@@ -109,6 +109,17 @@ export function createApiRouter(db: any, logger: any, upload: any, chatLimiter: 
         }
     });
 
+    router.post('/auth/logout', csrfProtection, (req, res) => {
+        req.session.destroy((err) => {
+            if (err) {
+                logger.error({ err }, "Logout Error");
+                return res.status(500).json({ success: false, message: 'Logout failed' });
+            }
+            res.clearCookie('connect.sid');                
+            res.json({ success: true });
+        });
+    });
+    
     router.post('/vote', csrfProtection, upload.none(), (req, res) => {
         const sess = req.session;
         if (!sess.userId) {
