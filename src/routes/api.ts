@@ -1,5 +1,4 @@
 import express from 'express';
-import bcrypt from 'bcrypt';
 import DOMPurify from 'isomorphic-dompurify';
 import { z } from 'zod';
 import { generateUserMessageHtml, generateAgentMessageHtml, generateErrorHtml } from '../uiTemplates.js';
@@ -15,7 +14,8 @@ const chatSchema = z.object({
 export function createApiRouter(db: any, logger: any, upload: any, chatLimiter: any, csrfProtection: any, electionData?: any) {
     const router = express.Router();
 
-    router.post('/chat', chatLimiter, csrfProtection, upload.none(), async (req, res) => {
+    // Use standard urlencoded body parsing for HTMX forms
+    router.post('/chat', chatLimiter, csrfProtection, async (req, res) => {
         let htmlResponse = "";
         try {
             const validationResult = chatSchema.safeParse(req.body);
@@ -26,6 +26,8 @@ export function createApiRouter(db: any, logger: any, upload: any, chatLimiter: 
             const locale = lang || req.query.lang || 'en';
             
             const sess = req.session;
+            if (!sess) return res.status(500).send(generateErrorHtml("Session initialization failed."));
+
             logger.info({
                 userId: sess.userId || 'anonymous',
                 messageLength: message.length,
@@ -71,12 +73,11 @@ export function createApiRouter(db: any, logger: any, upload: any, chatLimiter: 
                 userContext = { electionData };
             }
     
-            // Sliding window: keep only last 10 turns (20 entries: prompt + response)
+            // Sliding window: keep only last 10 turns
             if (dbHistory && dbHistory.length > 20) {
                 dbHistory = dbHistory.slice(-20);
             }
     
-            // Convert DB/Session history to API format for GenAI SDK
             const formattedHistory = dbHistory.map((item: any) => ({
                 role: item.role,
                 parts: [{ text: item.parts && Array.isArray(item.parts) ? item.parts[0].text : item.parts }],
@@ -84,7 +85,6 @@ export function createApiRouter(db: any, logger: any, upload: any, chatLimiter: 
             
             const { agentHtml, newHistory } = await handleChat(message, formattedHistory, locale as string, apiKey, userContext);
             
-            // Convert API format back to simple object for storage
             const serializableHistory = newHistory.map((item: any) => ({
                 role: item.role,
                 parts: item.parts?.[0]?.text || "",
@@ -107,45 +107,29 @@ export function createApiRouter(db: any, logger: any, upload: any, chatLimiter: 
             }
     
              htmlResponse += generateAgentMessageHtml(agentHtml);
-    
-            res.send(htmlResponse);
+             res.send(htmlResponse);
         } catch(e: any) {
-            logger.error({ err: e }, "Endpoint Error Processing Message");
-            res.status(500).send(htmlResponse + generateErrorHtml(e.message || "An unexpected error occurred while processing your message."));
+            logger.error({ err: e }, "Chat Error");
+            res.status(500).send(htmlResponse + generateErrorHtml("AI processing failed. Please try again."));
         }
     });
 
-    router.post('/auth/logout', csrfProtection, (req, res) => {
-        req.session.destroy((err) => {
-            if (err) {
-                logger.error({ err }, "Logout Error");
-                return res.status(500).json({ success: false, message: 'Logout failed' });
-            }
-            res.clearCookie('connect.sid');                
-            res.json({ success: true });
-        });
-    });
-    
-    router.post('/vote', csrfProtection, upload.none(), (req, res) => {
+    router.post('/vote', csrfProtection, (req, res) => {
         const sess = req.session;
-        if (!sess.userId) {
-            return res.status(401).send('<button disabled class="px-3 py-2 bg-gray-300 text-gray-500 border-2 border-gray-400 font-bold text-xs uppercase tracking-widest cursor-not-allowed">Log in to vote</button>');
+        if (!sess || !sess.userId) {
+            return res.status(401).send('<button disabled class="m3-button-disabled">Log in to vote</button>');
         }
     
         try {
+            // Correctly uses session userId - NO hardcoded emails here
             db.prepare("INSERT INTO votes (user_id) VALUES (?)").run(sess.userId);
-            res.send(`<button disabled class="px-3 py-2 bg-[#1A1A1A] text-white border-2 border-[#1A1A1A] font-bold text-xs uppercase tracking-widest relative flex items-center gap-2 group shadow-[2px_2px_0px_#1A1A1A]">
-                        <span>VOTED</span>
-                        <svg class="w-4 h-4 ink-applied" viewBox="0 0 24 24" fill="none">
-                            <path stroke-linecap="round" stroke-linejoin="round" class="ink-path" stroke-width="4" d="M12 2v8" stroke="#8b5cf6"/>
-                        </svg>
-                    </button>`);
+            res.send(`<button disabled class="m3-button-voted">VOTED</button>`);
         } catch(e: any) {
             if (e.message.includes('UNIQUE constraint failed')) {
-                res.send('<button disabled class="px-3 py-2 bg-[#1A1A1A] text-white border-2 border-[#1A1A1A] font-bold text-xs uppercase tracking-widest relative flex items-center gap-2 group shadow-[2px_2px_0px_#1A1A1A]"><span>ALREADY VOTED</span></button>');
+                res.send('<button disabled class="m3-button-voted">ALREADY VOTED</button>');
             } else {
-                logger.error({ err: e }, "Failed to record vote");
-                res.status(500).send('<button disabled class="px-3 py-2 bg-[#ea4335] text-white border-2 border-[#ea4335] font-bold text-xs uppercase tracking-widest">Error recording vote</button>');
+                logger.error({ err: e }, "Vote Error");
+                res.status(500).send('<button disabled class="m3-button-error">Error recording vote</button>');
             }
         }
     });

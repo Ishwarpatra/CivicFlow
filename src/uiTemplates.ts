@@ -1,3 +1,5 @@
+import DOMPurify from "isomorphic-dompurify";
+
 const buildChatBubble = (iconContent: string, iconBg: string, bubbleBg: string, bubbleBorder: string, bubbleShadow: string, textStyle: string, message: string, customClasses: string = "", extraAttrs: string = "") => `
     <div x-data="{ show: false }" x-init="setTimeout(() => show = true, 50)" :class="show ? 'chat-bubble-entered' : 'chat-bubble-enter'" class="spring-m3 flex gap-4 ${customClasses}">
         <div class="w-8 h-8 ${iconBg} text-white flex items-center justify-center text-xs font-bold shrink-0 border border-[#1A1A1A]">${iconContent}</div>
@@ -66,7 +68,7 @@ export const generateRepInsightsHtml = () => `
 
 export const generateOfflineEligibilityHtml = () => `
     <div class="space-y-3">
-        <p class="text-xs bg-[#1A1A1A] text-white px-2 py-1 inline-block uppercase font-bold tracking-widest shadow-[2px_2px_0px_#FF9933]">Offline Intelligence</p>
+        <p class="text-xs bg-black text-white px-2 py-1 inline-block uppercase font-bold tracking-widest shadow-[2px_2px_0px_#FF9933]">Offline Intelligence</p>
         <p>Based on your input, you will likely qualify for the <strong>upcoming quarterly registration cycle</strong>.</p>
         <p>In India, citizens who turn 18 by <strong>Jan 1, Apr 1, Jul 1, or Oct 1</strong> can register in advance instead of waiting over a year! I can help you draft Form 6.</p>
     </div>
@@ -74,13 +76,15 @@ export const generateOfflineEligibilityHtml = () => `
 
 export const generateOfflineBoothHtml = () => `
     <div class="space-y-3">
-        <p class="text-xs bg-[#1A1A1A] text-white px-2 py-1 inline-block uppercase font-bold tracking-widest shadow-[2px_2px_0px_#FF9933]">Offline Intelligence</p>
+        <p class="text-xs bg-black text-white px-2 py-1 inline-block uppercase font-bold tracking-widest shadow-[2px_2px_0px_#FF9933]">Offline Intelligence</p>
         <p>To find your polling booth without live AI access, you can visit the <a href="https://electoralsearch.eci.gov.in/" target="_blank" class="text-[#FF9933] font-bold underline hover:text-[#1A1A1A] transition-colors">Official ECI Electoral Search</a>.</p>
         <p>You can search by your EPIC number or personal details.</p>
     </div>
 `;
 
-export const generateGenericOfflineFallbackHtml = (errorDetails: string) => `
+export const generateGenericOfflineFallbackHtml = (errorDetails: string) => {
+    const safeError = DOMPurify.sanitize(errorDetails, { ALLOWED_TAGS: [] });
+    return `
     <div class="space-y-4">
         <p class="text-xs bg-[#ea4335] text-white px-2 py-1 inline-block uppercase font-bold tracking-widest shadow-[2px_2px_0px_#1A1A1A]">Intelligence Core Offline</p>
         <p>I cannot process natural language right now. Please use the official ECI portals below:</p>
@@ -100,9 +104,12 @@ export const generateGenericOfflineFallbackHtml = (errorDetails: string) => `
             </a>
         </div>
         
-        <p class="text-[10px] opacity-50 font-mono mt-4 break-words">Log: ${errorDetails}</p>
+        <p class="text-[10px] opacity-50 font-mono mt-4 break-words">Log Reference: ${safeError}</p>
     </div>
 `;
+};
 
-export const generateErrorHtml = (errorDetails: string) => 
-    buildChatBubble('ERR', 'bg-[#ea4335]', 'bg-[#F8F7F3]', 'border-[#ea4335]', 'shadow-[4px_4px_0px_#ea4335]', 'text-[#ea4335] flex flex-col gap-2', `<p class="font-bold uppercase tracking-widest text-xs mb-2 text-[#1A1A1A]">System Error</p><p>${errorDetails}</p>`, 'mb-6 relative');
+export const generateErrorHtml = (errorDetails: string) => {
+    const safeError = DOMPurify.sanitize(errorDetails, { ALLOWED_TAGS: [] });
+    return buildChatBubble('ERR', 'bg-[#ea4335]', 'bg-[#F8F7F3]', 'border-[#ea4335]', 'shadow-[4px_4px_0px_#ea4335]', 'text-[#ea4335] flex flex-col gap-2', `<p class="font-bold uppercase tracking-widest text-xs mb-2 text-[#1A1A1A]">System Error</p><p>${safeError}</p>`, 'mb-6 relative');
+};

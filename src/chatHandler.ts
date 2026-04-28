@@ -1,7 +1,6 @@
 import { getGeminiModel } from "./aiService.js";
 import { marked } from "marked";
 import DOMPurify from "isomorphic-dompurify";
-import pino from "pino";
 import { 
     generateSequoiaPitchHtml, 
     generateRepInsightsHtml,
@@ -10,13 +9,6 @@ import {
     generateOfflineBoothHtml
 } from "./uiTemplates.js";
 import { SYSTEM_CONSTANTS } from "./constants.js";
-
-const logger = pino({
-    transport: {
-        target: 'pino-pretty',
-        options: { colorize: true }
-    }
-});
 
 export const handleChat = async (message: string, history: any[] = [], locale: string = "en", apiKey?: string, userContext?: any) => {
     
@@ -30,7 +22,7 @@ export const handleChat = async (message: string, history: any[] = [], locale: s
             const rep = userContext.representatives[0];
             const html = `
                 <div class="space-y-4">
-                    <p>Based on your profile in <strong>${userContext.constituency.name}</strong>, your current representative is <strong>${rep.name}</strong> from <strong>${rep.party}</strong>.</p>
+                    <p>Based on your profile in <strong>${DOMPurify.sanitize(userContext.constituency.name)}</strong>, your current representative is <strong>${DOMPurify.sanitize(rep.name)}</strong> from <strong>${DOMPurify.sanitize(rep.party)}</strong>.</p>
                 </div>
             `;
             return { agentHtml: html, newHistory: history };
@@ -44,13 +36,11 @@ export const handleChat = async (message: string, history: any[] = [], locale: s
         
         let responseText = "";
         
-        // Append user context to instructions if it exists
         let userContextString = "";
         if (userContext) {
             userContextString = `\n\nUSER CONTEXT:\n${JSON.stringify(userContext, null, 2)}\nUse this context to answer questions about their specific representative or constituency when asked.`;
         }
         
-        // Check if we are running in dummy mock mode (placeholder key)
         if (ai === "MOCK_MODE") {
             const lowerMsg = message.toLowerCase();
             if (lowerMsg.includes("eligible") || lowerMsg.includes("qualify") || lowerMsg.includes("18") || lowerMsg.includes("register")) {
@@ -78,7 +68,6 @@ export const handleChat = async (message: string, history: any[] = [], locale: s
              }
          }
 
-        // Filter and map out messy history objects to raw light strings for the session
         const cleanHistory = history.map(h => ({
             role: h.role === 'model' ? 'model' : 'user',
             parts: [{ text: h.parts?.[0]?.text || h.text || '' }]
@@ -87,37 +76,34 @@ export const handleChat = async (message: string, history: any[] = [], locale: s
         const contents = [...cleanHistory, { role: 'user', parts: [{ text: message }] }];
 
         const response = await ai.models.generateContent({
-             model: 'gemini-2.5-flash',
+             model: 'gemini-1.5-flash', // Pin to a specific model version supported by current SDK
              contents: contents,
              config: {
                  systemInstruction: instructions,
                  tools: [
-                     { googleSearch: {} } // Enable grounding for latest ECI rules
+                     { googleSearch: {} } 
                  ]
              }
         });
 
-        responseText = response.text || "I'm sorry, I encountered an issue.";
+        responseText = response.text || "I encountered an issue generating a response.";
         
+        // Sync parsing if possible, or await if marked is configured as async
         const rawHtml = await marked.parse(responseText);
         const cleanHtml = DOMPurify.sanitize(rawHtml, { USE_PROFILES: { html: true } });
         const agentHtml = `<div class="[&>p]:mb-3 [&>p:last-child]:mb-0 [&_a]:text-[#FF9933] [&_a]:font-bold [&_a]:underline hover:[&_a]:text-[#1A1A1A] [&_a]:transition-colors [&_strong]:font-bold">${cleanHtml}</div>`;
         
-        // Serialize and slice history to max turning lengths strictly to { role, text }
-        // Ensure that text is properly sanitized before placing into session memory to prevent XSS leakages
         const simplifiedHistory = [...history, { role: 'user', text: message }, { role: 'model', text: responseText }].map((h: any) => ({
              role: h.role === 'model' ? 'model' : 'user',
              text: DOMPurify.sanitize(h.parts?.[0]?.text || h.text || '', { ALLOWED_TAGS: [] })
-        })).slice(-10);
+        })).slice(-20);
 
         return { agentHtml, newHistory: simplifiedHistory };
         
     } catch(e: any) {
-        logger.error({ err: e }, "Gemini API Generation Error");
-        
-        // Offline Fallback - generic text
-        const safeError = "Civilian node disconnected. Please verify your internet connection or API settings.";
-        const failedHistory = [...history, { role: 'user', text: message }].slice(-10);
+        // Generic text for user, detailed for logs
+        const safeError = "Intelligence Core Offline. Please check your connection.";
+        const failedHistory = [...history, { role: 'user', text: message }].slice(-20);
         return { agentHtml: generateGenericOfflineFallbackHtml(e.message || safeError), newHistory: failedHistory };
     }
 }
