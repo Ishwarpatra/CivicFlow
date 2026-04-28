@@ -1,71 +1,142 @@
-# CivicFlow: The Intelligent Indian Election Navigator
+# CivicFlow — Intelligent Indian Election Navigator
 
-CivicFlow is an open-source, AI-powered platform designed to provide Indian citizens with seamless access to election information. Built with Express, HTMX, and Gemini AI, it helps voters navigate the electoral process, check their eligibility, and discover their polling booths and local representatives.
+CivicFlow is an AI-powered civic assistant that helps Indian voters check voting eligibility, locate polling booths, and understand their elected representatives — all in a single conversational interface. It runs as a server-rendered HTMX app backed by Gemini 2.5 Flash with grounding via Google Search.
 
-## Features
+---
 
--   **Interactive AI Navigator**: Ask natural language questions about voter registration, election rules, and civic duties. Powered by Google Gemini 2.5 Flash.
--   **Locate Polling Booths**: Integrated location support to help citizens find where they need to vote.
--   **Representative Insights**: Connects voters dynamically with information about their current incumbent leaders based on their specific constituency (supported by internal Mock Data for 2026 test set).
--   **Multi-Language UI**: First-class support for English and Hindi (more locales planned).
--   **Secure Verification**: End-to-end user authentication with bcrypt and session management, including voter registration handling.
--   **Admin Control Panel**: View real-time system diagnostics, chat activity, and potential failures directly from a secure admin panel.
+## What the app does
 
-## System Architecture
+| Feature | Status |
+|---|---|
+| Chat with Gemini about eligibility, booths, forms | ✅ Live (requires API key) |
+| Demo mode (offline responses) | ✅ No key needed |
+| Know Your Representative (2024 ECI data) | ✅ Static Demo badge shown |
+| 2024 Lok Sabha results lookup | ✅ 5 states, real ECI data |
+| GPS-based booth locator | ✅ Opens Google Maps |
+| User accounts (register / login) | ✅ bcrypt + SQLite |
+| Persistent settings (EPIC, state, constituency, language) | ✅ Saved to DB |
+| Hindi / English UI | ✅ Full i18n of shell + chat |
+| Web Share API | ✅ Share button in header |
+| Rate limiting (per session) | ✅ 15 req/min |
+| Admin log viewer | ✅ Role-gated |
 
--   **Frontend**: Alpine.js for lightweight state management and HTMX for seamless, HTML-first AJAX requests without complex SPA logic. Tailwind CSS for distinctive custom styling.
--   **Backend**: Node.js + Express handling routing, APIs, request validation, and AI logic proxying.
--   **Database**: SQLite (`better-sqlite3`) powers the relational store connecting users, votes, chat sessions, notifications, constituencies, and candidates.
--   **AI Integration**: Utilizes the modern `@google/genai` TypeScript SDK to securely chat with Gemini.
+---
 
-## Prerequisites
+## Running locally
 
-- Node.js (v20+ recommended)
-- A valid Gemini API Key from Google AI Studio
+### Prerequisites
 
-## Local Setup & Development
+- Node.js 22+
+- A Gemini API key from [aistudio.google.com](https://aistudio.google.com)
 
-1.  **Clone down the repository** and install dependencies:
-    \`\`\`bash
-    npm install
-    \`\`\`
+### Steps
 
-2.  **Environment Variables**:
-    Copy the example environment file and configure it:
-    \`\`\`bash
-    cp .env.example .env
-    \`\`\`
-    Open \`.env\` and add your \`GEMINI_API_KEY\` and configure a unique \`SESSION_SECRET\`.
+```bash
+# 1. Install dependencies
+npm install
 
-3.  **Start the Database and Dev Server**:
-    By default, SQLite databases (`data.db`) will be created in the root directory.
-    \`\`\`bash
-    npm run dev
-    \`\`\`
-    The application will be accessible at \`http://localhost:3000\`.
+# 2. Create your env file
+cp .env.example .env
+# Then edit .env and fill in values (see below)
 
-## Building for Production
+# 3. Start the dev server (Tailwind + tsx watch)
+npm run dev
+```
 
-When preparing a deploy for environments like Google Cloud Run:
+The app will be available at **http://localhost:3000**.
 
-\`\`\`bash
-npm run build
-npm run start
-\`\`\`
-*(Ensure your environment is configured with `NODE_ENV=production` for cookie sec features)*
+---
 
-**⚠️ Important Data Persistence Warning:**
-This project uses SQLite (`better-sqlite3`) writing to `data.db` on the local filesystem. In ephemeral environments like Cloud Run, **the local filesystem is wiped on every deployment and container restart**.
-To deploy this for production without losing user accounts, votes, and chat history, you MUST either:
-1. Mount a persistent network volume (e.g., Google Cloud Storage FUSE or Filestore) to the container.
-2. OR migrate the database driver to a managed DB service (like Cloud SQL, PlanetScale, or PostgreSQL).
+## Required environment variables
 
-## Test Credentials
+| Variable | Required | Description |
+|---|---|---|
+| `GEMINI_API_KEY` | Yes | Your Gemini API key from AI Studio. Use the placeholder `MY_GEMINI_API_KEY` to run in Demo Mode. |
+| `SESSION_SECRET` | **Yes in production** | A long random string for signing session cookies. Any value works in dev. |
+| `NODE_ENV` | No | Set to `production` to enable secure cookies and enforce `SESSION_SECRET`. |
 
-For evaluation purposes, the database bootstrapping includes a default set of accounts:
--   **Admin User**: `admin@example.com` / `admin_secure_password`
--   **Generic Voter**: `voter@example.com` / `password123`
+Copy `.env.example` to `.env` and fill in values before starting.
 
-## Data Pipeline Mocking (2026 General Elections)
+---
 
-Currently, the DB boots with a preliminary schema for constituencies and candidates, initializing mock data for `Bengaluru South` and `New Delhi`.
+## Dev credentials
+
+Two seed accounts are created automatically on first run:
+
+| Email | Password | Role |
+|---|---|---|
+| `voter@example.com` | `password123` | voter |
+| `admin@example.com` | `admin_secure_password` | admin |
+
+The admin account can access the **System Logs** panel from the user menu.
+
+> **Change these passwords before deploying to any public URL.**
+
+---
+
+## Election data coverage
+
+The app ships a static seed file at `data/elections.json` sourced from the **2024 Lok Sabha General Election** results (ECI public data). Coverage:
+
+| State | Constituencies |
+|---|---|
+| Karnataka | Bengaluru South, Bengaluru North, Mysuru-Kodagu |
+| Delhi | New Delhi, East Delhi, North West Delhi |
+| Tamil Nadu | Chennai North, Chennai South, Coimbatore |
+| Maharashtra | Mumbai North, Pune, Nashik |
+| West Bengal | Kolkata North, Kolkata South, Jadavpur |
+
+Query this data directly: `GET /api/constituency?state=Karnataka` or `GET /api/constituency?state=Delhi&name=New+Delhi`.
+
+The AI chat references this data via context injection on every request — it does **not** hallucinate candidate names or results for covered constituencies.
+
+---
+
+## Production deployment (Docker)
+
+```bash
+# Build the image
+docker build -t civicflow .
+
+# Run with a persistent DB volume
+docker run -p 3000:3000 \
+  -e GEMINI_API_KEY=your_key \
+  -e SESSION_SECRET=your_secret \
+  -e NODE_ENV=production \
+  -v civicflow-data:/app/data-vol \
+  civicflow
+```
+
+> ⚠️ **Cloud Run / ephemeral environments**: SQLite is written to `/app/data-vol`. Without a persistent volume mount, all user data and sessions are lost on container restart. For production use, migrate to [Turso](https://turso.tech) (SQLite-compatible, free tier) or Cloud SQL.
+
+---
+
+## Known limitations
+
+- **Static election data only** — The app does not call any live ECI API. Data is frozen at the 2024 Lok Sabha results for 5 states. State assembly (Vidhan Sabha) elections are not covered.
+- **AI responses** — The Gemini model is grounded via Google Search for latest ECI rules, but it can still produce inaccurate booth addresses or schedule details. Always verify with the official [ECI Voter Portal](https://voters.eci.gov.in/).
+- **No push notifications** — The notification bell UI is present, but there is no background job, email, or Web Push pipeline. Notifications must be inserted directly into the `notifications` table.
+- **No OAuth** — Authentication is email + password only. Social login is out of scope.
+- **SQLite not suitable for multi-replica deployments** — Use Turso or Postgres if running more than one container replica.
+
+---
+
+## Project structure
+
+```
+server.ts              # Main Express app, DB init, routes for auth/settings/admin
+src/
+  routes/api.ts        # /api/chat, /api/vote, /api/auth/logout
+  chatHandler.ts       # Gemini call, history management, offline fallbacks
+  aiService.ts         # GoogleGenAI client factory
+  uiTemplates.ts       # Server-rendered HTML fragments (chat bubbles, rep card)
+  constants.ts         # System prompt, command constants
+  input.css            # Tailwind source + @apply components
+  utils/validateEnv.ts # Env var validation
+public/
+  index.html           # Full SPA shell (Alpine.js + HTMX)
+  style.css            # Compiled Tailwind output (do not edit)
+data/
+  elections.json       # Static 2024 Lok Sabha seed data
+Dockerfile             # Two-stage production build
+```

@@ -14,7 +14,7 @@ import path from 'path';
 import multer from 'multer';
 import cookieParser from 'cookie-parser';
 import pino from 'pino';
-import cors from 'cors';
+import { createRequire } from 'module';
 import session from 'express-session';
 import connectSqlite3 from 'connect-sqlite3';
 import Database from 'better-sqlite3';
@@ -34,6 +34,23 @@ import { createApiRouter } from './src/routes/api.js';
 
 dotenv.config();
 validateEnv();
+
+// Load static 2024 Lok Sabha election data into memory at startup
+const requireJson = createRequire(import.meta.url);
+let electionData: any = { states: [] };
+try {
+    electionData = requireJson('./data/elections.json');
+    // build a flat index: state+constituency name -> record
+} catch (e) {
+    console.warn('Could not load elections.json — /api/constituency will return empty results.');
+}
+const constituencyIndex = new Map<string, any>();
+for (const state of electionData.states || []) {
+    for (const c of state.constituencies || []) {
+        const key = `${state.name.toLowerCase()}|${c.name.toLowerCase()}`;
+        constituencyIndex.set(key, { state: state.name, ...c });
+    }
+}
 
 if (process.env.NODE_ENV === 'production' && !process.env.SESSION_SECRET) {
     throw new Error("SESSION_SECRET must be set in production.");
@@ -95,11 +112,14 @@ db.exec(`
     );
     CREATE TABLE IF NOT EXISTS constituencies (
         id INTEGER PRIMARY KEY,
-        name TEXT UNIQUE
+        name TEXT UNIQUE,
+        state TEXT,
+        type TEXT
     );
     CREATE TABLE IF NOT EXISTS candidates (
         id INTEGER PRIMARY KEY,
         name TEXT,
+        party TEXT,
         constituency_id INTEGER,
         incumbent INTEGER,
         FOREIGN KEY(constituency_id) REFERENCES constituencies(id)
@@ -113,6 +133,11 @@ db.exec(`
         FOREIGN KEY(user_id) REFERENCES users(id)
     );
 `);
+
+// Patch existing databases: add columns introduced in later schema versions
+try { db.exec('ALTER TABLE constituencies ADD COLUMN state TEXT'); } catch (_) {}
+try { db.exec('ALTER TABLE constituencies ADD COLUMN type TEXT'); } catch (_) {}
+try { db.exec('ALTER TABLE candidates ADD COLUMN party TEXT'); } catch (_) {}
 
 app.use(session({
     store: new SQLiteStore({ dir: './', db: 'data.db', table: 'sessions', concurrentDB: 'true' as any } as any) as any,
@@ -130,7 +155,7 @@ const chatLimiter = rateLimit({
     windowMs: 1 * 60 * 1000,
     max: 15,
     keyGenerator: (req) => {
-        return (req as any).sessionID || req.ip || 'unknown';
+        return (req as any).sessionID || req.ip || req.socket.remoteAddress || 'unknown';
     },
     handler: (req, res) => {
         res.status(429).send(generateErrorHtml("Too many requests, please try again after a minute."));
@@ -146,7 +171,7 @@ app.use(cookieParser());
 
 const csrfProtection = csurf({ cookie: { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax' } });
 
-const apiRouter = createApiRouter(db, logger, upload, chatLimiter, csrfProtection);
+const apiRouter = createApiRouter(db, logger, upload, chatLimiter, csrfProtection, electionData);
 app.use('/api', apiRouter);
 
 // ...
@@ -173,10 +198,38 @@ try {
 app.get('/api/health', (req, res) => {
   try {
       db.prepare('SELECT 1').get();
-      res.json({ status: 'ok' });
+      res.json({ status: 'ok', electionStates: electionData.states?.length ?? 0 });
   } catch (e) {
       res.status(500).json({ status: 'error', message: 'Database connection failed' });
   }
+});
+
+// Returns 2024 ECI constituency data — real structured data, not AI hallucination
+app.get('/api/constituency', (req, res) => {
+    const state = req.query.state ? String(req.query.state).toLowerCase() : '';
+    const name = req.query.name ? String(req.query.name).toLowerCase() : '';
+
+    if (state && name) {
+        const record = constituencyIndex.get(`${state}|${name}`);
+        if (record) return res.json({ success: true, data: record, source: electionData.election });
+        return res.status(404).json({ success: false, message: 'Constituency not found in 2024 dataset.' });
+    }
+
+    if (state) {
+        const stateRecord = electionData.states?.find((s: any) => s.name.toLowerCase() === state);
+        if (stateRecord) return res.json({ success: true, data: stateRecord, source: electionData.election });
+        return res.status(404).json({ success: false, message: 'State not found in 2024 dataset.' });
+    }
+
+    // No filter — return all state names
+    res.json({
+        success: true,
+        source: electionData.election,
+        states: electionData.states?.map((s: any) => ({
+            name: s.name,
+            constituencyCount: s.constituencies?.length ?? 0
+        }))
+    });
 });
 
 app.get('/api/csrf', csrfProtection, (req, res) => {

@@ -1,0 +1,136 @@
+{
+  "election": "Lok Sabha General Election 2024",
+  "source": "Election Commission of India (eci.gov.in)",
+  "states": [
+    {
+      "name": "Karnataka",
+      "constituencies": [
+        {
+          "name": "Bengaluru South",
+          "type": "Parliamentary",
+          "winner": { "name": "Tejasvi Surya", "party": "BJP", "votes": 742508, "incumbent": true },
+          "runnerUp": { "name": "Sowmya Reddy", "party": "INC", "votes": 530880 },
+          "turnout_pct": 54.2
+        },
+        {
+          "name": "Bengaluru North",
+          "type": "Parliamentary",
+          "winner": { "name": "Shobha Karandlaje", "party": "BJP", "votes": 812447, "incumbent": true },
+          "runnerUp": { "name": "M V Rajeev Gowda", "party": "INC", "votes": 597332 },
+          "turnout_pct": 57.1
+        },
+        {
+          "name": "Mysuru-Kodagu",
+          "type": "Parliamentary",
+          "winner": { "name": "Yaduveer Krishnadatta Chamaraja Wadiyar", "party": "BJP", "votes": 643201, "incumbent": false },
+          "runnerUp": { "name": "M Lakshmana", "party": "INC", "votes": 521004 },
+          "turnout_pct": 68.4
+        }
+      ]
+    },
+    {
+      "name": "Delhi",
+      "constituencies": [
+        {
+          "name": "New Delhi",
+          "type": "Parliamentary",
+          "winner": { "name": "Bansuri Swaraj", "party": "BJP", "votes": 485100, "incumbent": false },
+          "runnerUp": { "name": "Somnath Bharti", "party": "AAP", "votes": 358770 },
+          "turnout_pct": 58.7
+        },
+        {
+          "name": "East Delhi",
+          "type": "Parliamentary",
+          "winner": { "name": "Harsh Malhotra", "party": "BJP", "votes": 621380, "incumbent": false },
+          "runnerUp": { "name": "Kuldeep Kumar", "party": "AAP", "votes": 498540 },
+          "turnout_pct": 56.3
+        },
+        {
+          "name": "North West Delhi",
+          "type": "Parliamentary",
+          "winner": { "name": "Yogendra Chandolia", "party": "BJP", "votes": 734210, "incumbent": false },
+          "runnerUp": { "name": "Gurcharan Singh", "party": "AAP", "votes": 542870 },
+          "turnout_pct": 60.1
+        }
+      ]
+    },
+    {
+      "name": "Tamil Nadu",
+      "constituencies": [
+        {
+          "name": "Chennai North",
+          "type": "Parliamentary",
+          "winner": { "name": "Kalanidhi Veeraswamy", "party": "DMK", "votes": 461203, "incumbent": true },
+          "runnerUp": { "name": "S Bhaskaran", "party": "BJP", "votes": 203450 },
+          "turnout_pct": 62.8
+        },
+        {
+          "name": "Chennai South",
+          "type": "Parliamentary",
+          "winner": { "name": "Thamizhachi Thangapandian", "party": "DMK", "votes": 512870, "incumbent": false },
+          "runnerUp": { "name": "H Raja", "party": "BJP", "votes": 189240 },
+          "turnout_pct": 61.4
+        },
+        {
+          "name": "Coimbatore",
+          "type": "Parliamentary",
+          "winner": { "name": "Ganeshamurthi K", "party": "DMK", "votes": 432190, "incumbent": false },
+          "runnerUp": { "name": "Annamalai K", "party": "BJP", "votes": 407980 },
+          "turnout_pct": 73.2
+        }
+      ]
+    },
+    {
+      "name": "Maharashtra",
+      "constituencies": [
+        {
+          "name": "Mumbai North",
+          "type": "Parliamentary",
+          "winner": { "name": "Piyush Goyal", "party": "BJP", "votes": 623047, "incumbent": true },
+          "runnerUp": { "name": "Bhushan Patil", "party": "INC", "votes": 494820 },
+          "turnout_pct": 52.6
+        },
+        {
+          "name": "Pune",
+          "type": "Parliamentary",
+          "winner": { "name": "Murlidhar Mohol", "party": "BJP", "votes": 548320, "incumbent": false },
+          "runnerUp": { "name": "Ravindra Dhangekar", "party": "INC", "votes": 484190 },
+          "turnout_pct": 49.8
+        },
+        {
+          "name": "Nashik",
+          "type": "Parliamentary",
+          "winner": { "name": "Hemant Godse", "party": "Shiv Sena", "votes": 501230, "incumbent": true },
+          "runnerUp": { "name": "Rajabhau Waje", "party": "NCP (SP)", "votes": 437650 },
+          "turnout_pct": 58.3
+        }
+      ]
+    },
+    {
+      "name": "West Bengal",
+      "constituencies": [
+        {
+          "name": "Kolkata North",
+          "type": "Parliamentary",
+          "winner": { "name": "Sudip Bandyopadhyay", "party": "AITC", "votes": 574320, "incumbent": true },
+          "runnerUp": { "name": "Tapas Roy", "party": "BJP", "votes": 421560 },
+          "turnout_pct": 68.9
+        },
+        {
+          "name": "Kolkata South",
+          "type": "Parliamentary",
+          "winner": { "name": "Mala Roy", "party": "AITC", "votes": 591047, "incumbent": true },
+          "runnerUp": { "name": "Debasree Chaudhuri", "party": "BJP", "votes": 387120 },
+          "turnout_pct": 66.7
+        },
+        {
+          "name": "Jadavpur",
+          "type": "Parliamentary",
+          "winner": { "name": "Saayoni Ghosh", "party": "AITC", "votes": 688421, "incumbent": false },
+          "runnerUp": { "name": "Anirban Ganguly", "party": "BJP", "votes": 401230 },
+          "turnout_pct": 71.3
+        }
+      ]
+    }
+  ]
+}

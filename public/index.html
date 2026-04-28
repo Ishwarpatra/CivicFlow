@@ -18,28 +18,44 @@
     <script>
         const dict = {
             en: {
-                lang: "Lang:",
-                login: "Log In",
-                logout: "Logout",
+                lang: "Lang:", login: "Log In", logout: "Logout",
                 placeholder: "Ask about eligibility...",
-                synthesizing: "Analyzing civic data...",
-                acquiring: "Acquiring GPS Signal...",
-                check: "Check Eligibility",
-                find: "Find Polling Booth",
-                know: "Know Your Rep",
-                welcome: "Namaskar! I'm your CivicFlow Navigator. I can help you check your voting eligibility, find your polling booth, or know your representative. What would you like to do?"
+                synthesizing: "Analyzing civic data...", acquiring: "Acquiring GPS Signal...",
+                check: "Check Eligibility", find: "Find Polling Booth", know: "Know Your Rep",
+                results: "2024 Results",
+                welcome: "Namaskar! I'm your CivicFlow Navigator. I can help you check your voting eligibility, find your polling booth, or know your representative. What would you like to do?",
+                share: "Share CivicFlow", shareCopied: "Link copied!",
+                noNotifs: "No notifications", markRead: "Mark read",
+                loginTitle: "Login", registerTitle: "Register",
+                emailLabel: "Email", passwordLabel: "Password",
+                needAccount: "Need an account? Register", haveAccount: "Have an account? Login",
+                settingsTitle: "Settings", epicLabel: "EPIC Number",
+                stateLabel: "State", constituencyLabel: "Constituency",
+                langPrefLabel: "Preferred Language", cancelBtn: "Cancel", saveBtn: "Save",
+                networkFail: "Network Failure",
+                networkMsg: "Cannot connect to CivicFlow servers. Please check your connection.",
+                locationDenied: "Location Access Denied or Timeout",
+                locationMsg: "Unable to retrieve coordinates. Please enable site permissions."
             },
             hi: {
-                lang: "भाषा:",
-                login: "लॉग इन",
-                logout: "लॉग आउट",
+                lang: "भाषा:", login: "लॉग इन", logout: "लॉग आउट",
                 placeholder: "पात्रता के बारे में पूछें...",
-                synthesizing: "नागरिक डेटा का विश्लेषण कर रहा है...",
-                acquiring: "जीपीएस सिग्नल प्राप्त कर रहा है...",
-                check: "पात्रता जाँचें",
-                find: "मतदान केंद्र खोजें",
-                know: "अपने प्रतिनिधि को जानें",
-                welcome: "नमस्कार! मैं आपका सिविकफ्लो नेविगेटर हूँ। मैं आपको आपकी मतदान पात्रता जांचने, अपना मतदान केंद्र ढूंढने, या आपके प्रतिनिधि के बारे में जानने में मदद कर सकता हूँ। आप क्या करना चाहेंगे?"
+                synthesizing: "नागरिक डेटा का विश्लेषण कर रहा है...", acquiring: "जीपीएस सिग्नल प्राप्त कर रहा है...",
+                check: "पात्रता जाँचें", find: "मतदान केंद्र खोजें", know: "अपने प्रतिनिधि को जानें",
+                results: "2024 परिणाम",
+                welcome: "नमस्कार! मैं आपका सिविकफ्लो नेविगेटर हूँ। मैं आपको मतदान पात्रता जांचने, मतदान केंद्र ढूंढने, या प्रतिनिधि जानने में मदद कर सकता हूँ।",
+                share: "शेयर करें", shareCopied: "लिंक कॉपी हो गया!",
+                noNotifs: "कोई सूचना नहीं", markRead: "पढ़ा हुआ चिह्नित करें",
+                loginTitle: "लॉग इन", registerTitle: "पंजीकरण",
+                emailLabel: "ईमेल", passwordLabel: "पासवर्ड",
+                needAccount: "खाता नहीं है? पंजीकरण करें", haveAccount: "खाता है? लॉग इन करें",
+                settingsTitle: "सेटिंग्स", epicLabel: "EPIC नंबर",
+                stateLabel: "राज्य", constituencyLabel: "निर्वाचन क्षेत्र",
+                langPrefLabel: "पसंदीदा भाषा", cancelBtn: "रद्द करें", saveBtn: "सहेजें",
+                networkFail: "नेटवर्क विफलता",
+                networkMsg: "CivicFlow सर्वर से कनेक्ट नहीं हो सका। कृपया अपना कनेक्शन जांचें।",
+                locationDenied: "स्थान पहुँच अस्वीकृत",
+                locationMsg: "निर्देशांक प्राप्त नहीं हो सके। कृपया साइट अनुमतियाँ सक्षम करें।"
             }
         };
 
@@ -90,6 +106,10 @@
                      <option value="hi">HIN</option>
                  </select>
              </div>
+             <!-- Web Share API -->
+             <button x-data @click="if(navigator.share){navigator.share({title:'CivicFlow',text:'AI Indian Election Navigator',url:location.href})}else{navigator.clipboard.writeText(location.href);alert($store.app.t('shareCopied'))}" :title="$store.app.t('share')" class="hidden sm:flex w-9 h-9 items-center justify-center border-2 border-[#1A1A1A] hover:bg-[#FF9933] hover:text-white transition-colors bg-[#F8F7F3] shadow-[2px_2px_0px_#1A1A1A]" aria-label="Share">
+                 <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+             </button>
              <div class="w-px h-8 bg-[#1A1A1A] opacity-20 hidden sm:block"></div>
              <div x-data="{ user: null, open: false, showSettings: false, notifs: [], showNotifs: false }" 
                   x-init="fetch('/api/auth/me').then(r=>r.json()).then(d=>{if(d.success) document.dispatchEvent(new CustomEvent('auth-changed', {detail: d.user}))})"
@@ -105,12 +125,12 @@
                               </button>
                               <div x-show="showNotifs" x-cloak @click.away="showNotifs = false" class="absolute right-0 mt-2 w-64 bg-white border-2 border-[#1A1A1A] shadow-[4px_4px_0px_#1A1A1A] max-h-64 overflow-y-auto z-50">
                                    <template x-if="notifs.length === 0">
-                                       <div class="p-3 text-xs text-center">No notifications</div>
+                                       <div class="p-3 text-xs text-center" x-text="$store.app.t('noNotifs')"></div>
                                    </template>
                                    <template x-for="notif in notifs" :key="notif.id">
                                         <div class="p-3 border-b border-[#1A1A1A] text-xs" :class="notif.is_read ? 'opacity-50' : 'bg-[#F8F7F3] font-bold'">
                                              <div x-text="notif.message"></div>
-                                             <button @click="fetch('/api/notifications/read', {method:'POST', headers:{'Content-Type':'application/json', 'CSRF-Token': $store.app.csrfToken}, body: JSON.stringify({notification_id: notif.id})}).then(() => notif.is_read = true)" x-show="!notif.is_read" class="mt-2 text-[10px] text-[#FF9933] underline">Mark read</button>
+                                             <button @click="fetch('/api/notifications/read', {method:'POST', headers:{'Content-Type':'application/json', 'CSRF-Token': $store.app.csrfToken}, body: JSON.stringify({notification_id: notif.id})}).then(() => notif.is_read = true)" x-show="!notif.is_read" class="mt-2 text-[10px] text-[#FF9933] underline" x-text="$store.app.t('markRead')"></button>
                                         </div>
                                    </template>
                               </div>
@@ -136,15 +156,15 @@
                          <!-- Settings Modal -->
                          <div x-show="showSettings" x-cloak class="fixed inset-0 bg-black/50 z-[200] flex justify-center items-center">
                              <div @click.away="showSettings = false" class="bg-white border-2 border-[#1A1A1A] shadow-[8px_8px_0px_#1A1A1A] p-6 w-96 max-w-[90vw]" x-data="{ formData: {epic_number: '', state: '', constituency: '', language_preference: 'en'} }" x-init="$watch('showSettings', v => { if(v) fetch('/api/settings',{headers: {'CSRF-Token': $store.app.csrfToken}}).then(r=>r.json()).then(d => {if(d.success) formData = d.settings || formData}) })">
-                                  <h2 class="text-[#1A1A1A] uppercase tracking-widest font-black text-xl border-b-2 border-[#1A1A1A] pb-2 mb-4">Settings</h2>
+                                  <h2 class="text-[#1A1A1A] uppercase tracking-widest font-black text-xl border-b-2 border-[#1A1A1A] pb-2 mb-4" x-text="$store.app.t('settingsTitle')"></h2>
                                   <div class="space-y-4">
-                                      <div><label class="text-[10px] uppercase font-bold tracking-widest block mb-1">EPIC Number</label><input type="text" x-model="formData.epic_number" class="w-full border-2 border-[#1A1A1A] px-2 py-1 text-sm bg-[#F8F7F3] focus:bg-white focus:outline-none shadow-[2px_2px_0px_#1A1A1A]"></div>
-                                      <div><label class="text-[10px] uppercase font-bold tracking-widest block mb-1">State</label><input type="text" x-model="formData.state" class="w-full border-2 border-[#1A1A1A] px-2 py-1 text-sm bg-[#F8F7F3] focus:bg-white focus:outline-none shadow-[2px_2px_0px_#1A1A1A]"></div>
-                                      <div><label class="text-[10px] uppercase font-bold tracking-widest block mb-1">Constituency</label><input type="text" x-model="formData.constituency" class="w-full border-2 border-[#1A1A1A] px-2 py-1 text-sm bg-[#F8F7F3] focus:bg-white focus:outline-none shadow-[2px_2px_0px_#1A1A1A]"></div>
-                                      <div><label class="text-[10px] uppercase font-bold tracking-widest block mb-1">Preferred Language</label><select x-model="formData.language_preference" class="w-full border-2 border-[#1A1A1A] px-2 py-1 text-sm bg-[#F8F7F3] focus:bg-white focus:outline-none shadow-[2px_2px_0px_#1A1A1A]"><option value="en">English</option><option value="hi">Hindi</option></select></div>
+                                      <div><label class="text-[10px] uppercase font-bold tracking-widest block mb-1" x-text="$store.app.t('epicLabel')"></label><input type="text" x-model="formData.epic_number" class="w-full border-2 border-[#1A1A1A] px-2 py-1 text-sm bg-[#F8F7F3] focus:bg-white focus:outline-none shadow-[2px_2px_0px_#1A1A1A]"></div>
+                                      <div><label class="text-[10px] uppercase font-bold tracking-widest block mb-1" x-text="$store.app.t('stateLabel')"></label><input type="text" x-model="formData.state" class="w-full border-2 border-[#1A1A1A] px-2 py-1 text-sm bg-[#F8F7F3] focus:bg-white focus:outline-none shadow-[2px_2px_0px_#1A1A1A]"></div>
+                                      <div><label class="text-[10px] uppercase font-bold tracking-widest block mb-1" x-text="$store.app.t('constituencyLabel')"></label><input type="text" x-model="formData.constituency" class="w-full border-2 border-[#1A1A1A] px-2 py-1 text-sm bg-[#F8F7F3] focus:bg-white focus:outline-none shadow-[2px_2px_0px_#1A1A1A]"></div>
+                                      <div><label class="text-[10px] uppercase font-bold tracking-widest block mb-1" x-text="$store.app.t('langPrefLabel')"></label><select x-model="formData.language_preference" class="w-full border-2 border-[#1A1A1A] px-2 py-1 text-sm bg-[#F8F7F3] focus:bg-white focus:outline-none shadow-[2px_2px_0px_#1A1A1A]"><option value="en">English</option><option value="hi">Hindi</option></select></div>
                                       <div class="flex gap-2 pt-2">
-                                          <button @click="showSettings = false" class="flex-1 py-2 text-xs font-bold uppercase border-2 border-[#1A1A1A] hover:bg-[#F0F0F0]">Cancel</button>
-                                          <button @click="fetch('/api/settings', {method:'POST', headers:{'Content-Type':'application/json','CSRF-Token': $store.app.csrfToken}, body: JSON.stringify(formData)}).then(()=>{showSettings = false; $store.app.locale = formData.language_preference;})" class="flex-1 py-2 bg-[#FF9933] text-white border-2 border-[#1A1A1A] text-xs font-bold uppercase shadow-[2px_2px_0px_#1A1A1A] hover:shadow-none hover:translate-y-[2px]">Save</button>
+                                          <button @click="showSettings = false" class="flex-1 py-2 text-xs font-bold uppercase border-2 border-[#1A1A1A] hover:bg-[#F0F0F0]" x-text="$store.app.t('cancelBtn')"></button>
+                                          <button @click="fetch('/api/settings', {method:'POST', headers:{'Content-Type':'application/json','CSRF-Token': $store.app.csrfToken}, body: JSON.stringify(formData)}).then(()=>{showSettings = false; $store.app.locale = formData.language_preference;})" class="flex-1 py-2 bg-[#FF9933] text-white border-2 border-[#1A1A1A] text-xs font-bold uppercase shadow-[2px_2px_0px_#1A1A1A] hover:shadow-none hover:translate-y-[2px]" x-text="$store.app.t('saveBtn')"></button>
                                       </div>
                                   </div>
                              </div>
@@ -159,16 +179,16 @@
                         <div x-show="showAuth" x-cloak class="fixed inset-0 bg-black/50 z-[200] flex justify-center items-center">
                             <div @click.away="showAuth = false" class="bg-white border-2 border-[#1A1A1A] shadow-[8px_8px_0px_#1A1A1A] p-6 w-96 max-w-[90vw]">
                                 <div class="flex justify-between items-center border-b-2 border-[#1A1A1A] pb-2 mb-4">
-                                    <h2 class="text-[#1A1A1A] uppercase tracking-widest font-black text-xl" x-text="isLogin ? 'Login' : 'Register'"></h2>
+                                    <h2 class="text-[#1A1A1A] uppercase tracking-widest font-black text-xl" x-text="isLogin ? $store.app.t('loginTitle') : $store.app.t('registerTitle')"></h2>
                                     <button @click="showAuth = false" class="text-xs font-bold">✕</button>
                                 </div>
                                 <div class="space-y-4">
                                     <div x-show="error" class="text-[#ea4335] text-xs font-bold bg-[#ea4335]/10 p-2" x-text="error"></div>
-                                    <div><label class="text-[10px] uppercase font-bold tracking-widest block mb-1">Email</label><input type="email" x-model="email" class="w-full border-2 border-[#1A1A1A] px-2 py-1 text-sm bg-[#F8F7F3] focus:bg-white focus:outline-none shadow-[2px_2px_0px_#1A1A1A]"></div>
-                                    <div><label class="text-[10px] uppercase font-bold tracking-widest block mb-1">Password</label><input type="password" x-model="password" class="w-full border-2 border-[#1A1A1A] px-2 py-1 text-sm bg-[#F8F7F3] focus:bg-white focus:outline-none shadow-[2px_2px_0px_#1A1A1A]"></div>
-                                    <button @click="fetch(isLogin ? '/api/login' : '/api/register', {method: 'POST', headers: {'Content-Type': 'application/json', 'CSRF-Token': $store.app.csrfToken}, body: JSON.stringify({email, password})}).then(r => r.json()).then(d => { if(d.success) { showAuth = false; document.dispatchEvent(new CustomEvent('auth-changed', {detail: d})); } else { error = d.message; }})" class="w-full py-2 bg-[#FF9933] text-white border-2 border-[#1A1A1A] text-xs font-bold uppercase shadow-[2px_2px_0px_#1A1A1A] hover:shadow-none hover:translate-y-[2px]" x-text="isLogin ? 'Login' : 'Register'"></button>
+                                    <div><label class="text-[10px] uppercase font-bold tracking-widest block mb-1" x-text="$store.app.t('emailLabel')"></label><input type="email" x-model="email" class="w-full border-2 border-[#1A1A1A] px-2 py-1 text-sm bg-[#F8F7F3] focus:bg-white focus:outline-none shadow-[2px_2px_0px_#1A1A1A]"></div>
+                                    <div><label class="text-[10px] uppercase font-bold tracking-widest block mb-1" x-text="$store.app.t('passwordLabel')"></label><input type="password" x-model="password" class="w-full border-2 border-[#1A1A1A] px-2 py-1 text-sm bg-[#F8F7F3] focus:bg-white focus:outline-none shadow-[2px_2px_0px_#1A1A1A]"></div>
+                                    <button @click="fetch(isLogin ? '/api/login' : '/api/register', {method: 'POST', headers: {'Content-Type': 'application/json', 'CSRF-Token': $store.app.csrfToken}, body: JSON.stringify({email, password})}).then(r => r.json()).then(d => { if(d.success) { showAuth = false; document.dispatchEvent(new CustomEvent('auth-changed', {detail: d})); } else { error = d.message; }})" class="w-full py-2 bg-[#FF9933] text-white border-2 border-[#1A1A1A] text-xs font-bold uppercase shadow-[2px_2px_0px_#1A1A1A] hover:shadow-none hover:translate-y-[2px]" x-text="isLogin ? $store.app.t('loginTitle') : $store.app.t('registerTitle')"></button>
                                     <div class="text-center mt-2">
-                                        <button @click="isLogin = !isLogin; error = ''" class="text-[10px] text-[#1A1A1A] underline" x-text="isLogin ? 'Need an account? Register' : 'Have an account? Login'"></button>
+                                        <button @click="isLogin = !isLogin; error = ''" class="text-[10px] text-[#1A1A1A] underline" x-text="isLogin ? $store.app.t('needAccount') : $store.app.t('haveAccount')"></button>
                                     </div>
                                 </div>
                             </div>
@@ -226,7 +246,7 @@
                         <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"></path></svg>
                     </button>
                     <!-- Cancel Button when pending -->
-                    <button type="button" x-show="isPending" @click="$refs.chatForm.dispatchEvent(new Event('htmx:abort')); document.getElementById('acquire-loader')?.remove(); $dispatch('chat-error');" class="w-12 h-12 bg-[#ea4335] text-white flex items-center justify-center border-2 border-[#1A1A1A] hover:bg-[#c5221f] transition-colors shadow-[4px_4px_0px_rgba(26,26,26,0.2)] hover:shadow-[2px_2px_0px_#1A1A1A] hover:translate-y-[2px] shrink-0 active:translate-y-[4px] active:shadow-none transition-all" aria-label="Cancel">
+                    <button type="button" x-show="isPending" @click="htmx.abort($refs.chatForm); document.getElementById('acquire-loader')?.remove(); $dispatch('chat-error');" class="w-12 h-12 bg-[#ea4335] text-white flex items-center justify-center border-2 border-[#1A1A1A] hover:bg-[#c5221f] transition-colors shadow-[4px_4px_0px_rgba(26,26,26,0.2)] hover:shadow-[2px_2px_0px_#1A1A1A] hover:translate-y-[2px] shrink-0 active:translate-y-[4px] active:shadow-none transition-all" aria-label="Cancel">
                         <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"></path></svg>
                     </button>
                 </form>
@@ -235,6 +255,7 @@
                 <button @click="$dispatch('trigger-chat', 'Am I eligible to vote?')" class="m3-button" x-text="$store.app.t('check')">Check Eligibility</button>
                 <button @click="$dispatch('trigger-chat', 'Find my polling booth')" class="m3-button-primary" x-text="$store.app.t('find')">Find Polling Booth</button>
                 <button @click="$dispatch('trigger-chat', 'KNOW_REP')" class="m3-button-secondary" x-text="$store.app.t('know')">Know Your Rep</button>
+                <button @click="$dispatch('trigger-chat', 'Show me 2024 Lok Sabha election results')" class="m3-button" x-text="$store.app.t('results')">2024 Results</button>
             </div>
             </div>
         </div>
@@ -246,7 +267,8 @@
         document.dispatchEvent(new CustomEvent('chat-error'));
         const chatBox = document.getElementById('chat-container');
         if (chatBox) {
-            chatBox.insertAdjacentHTML('beforeend', '<div class="spring-m3 flex gap-4 mb-6 relative chat-bubble-enter show"><div class="w-8 h-8 bg-[#ea4335] text-white flex items-center justify-center text-xs font-bold shrink-0 border border-[#1A1A1A]">ERR</div><div class="p-4 bg-[#F8F7F3] text-[#ea4335] text-sm leading-relaxed max-w-[85%] sm:max-w-[80%] border border-[#ea4335] shadow-[4px_4px_0px_#ea4335] flex flex-col gap-2"><p class="font-bold uppercase tracking-widest text-xs mb-2 text-[#1A1A1A]">Network Failure</p><p>Cannot connect to CivicFlow servers. Please check your connection and try again.</p></div></div>');
+            const _t = (k) => Alpine.store('app').t(k);
+        chatBox.insertAdjacentHTML('beforeend', `<div class="spring-m3 flex gap-4 mb-6 relative chat-bubble-enter show"><div class="w-8 h-8 bg-[#ea4335] text-white flex items-center justify-center text-xs font-bold shrink-0 border border-[#1A1A1A]">ERR</div><div class="p-4 bg-[#F8F7F3] text-[#ea4335] text-sm leading-relaxed max-w-[85%] sm:max-w-[80%] border border-[#ea4335] shadow-[4px_4px_0px_#ea4335] flex flex-col gap-2"><p class="font-bold uppercase tracking-widest text-xs mb-2 text-[#1A1A1A]">${_t('networkFail')}</p><p>${_t('networkMsg')}</p></div></div>`);
             setTimeout(() => {
                 const newBubble = chatBox.querySelector('.chat-bubble-enter.show');
                 if (newBubble) newBubble.classList.add('chat-bubble-entered');
@@ -284,12 +306,13 @@
 
             }, (error) => {
                  document.getElementById('acquire-loader')?.remove();
+                 const _tl = (k) => Alpine.store('app').t(k);
                  chatBox.insertAdjacentHTML('beforeend', `
                     <div x-data="{ show: false }" x-init="setTimeout(() => show = true, 50)" :class="show ? 'chat-bubble-entered' : 'chat-bubble-enter'" class="spring-m3 flex gap-4 mb-6 relative">
                         <div class="w-8 h-8 bg-[#ea4335] text-white flex items-center justify-center text-xs font-bold shrink-0 border border-[#1A1A1A]">ERR</div>
                         <div class="p-4 bg-[#F8F7F3] text-[#ea4335] text-sm leading-relaxed max-w-[85%] sm:max-w-[80%] border border-[#ea4335] shadow-[4px_4px_0px_#ea4335] flex flex-col gap-2">
-                             <p class="font-bold uppercase tracking-widest text-xs mb-2 text-[#1A1A1A]">Location Access Denied or Timeout</p>
-                             <p>Unable to retrieve coordinates. Please enable site permissions.</p>
+                             <p class="font-bold uppercase tracking-widest text-xs mb-2 text-[#1A1A1A]">${_tl('locationDenied')}</p>
+                             <p>${_tl('locationMsg')}</p>
                         </div>
                     </div>
                 `);

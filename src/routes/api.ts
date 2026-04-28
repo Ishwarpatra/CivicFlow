@@ -8,11 +8,11 @@ import { SYSTEM_CONSTANTS } from '../constants.js';
 
 const chatSchema = z.object({
     message: z.string().min(1).max(500),
-    lang: z.enum(['en', 'hi']).optional(),
+    lang: z.enum(['en', 'hi', 'ta', 'te', 'bn', 'mr', 'gu']).optional(),
     apiKey: z.string().max(255).optional(),
 });
 
-export function createApiRouter(db: any, logger: any, upload: any, chatLimiter: any, csrfProtection: any) {
+export function createApiRouter(db: any, logger: any, upload: any, chatLimiter: any, csrfProtection: any, electionData?: any) {
     const router = express.Router();
 
     router.post('/chat', chatLimiter, csrfProtection, upload.none(), async (req, res) => {
@@ -59,15 +59,16 @@ export function createApiRouter(db: any, logger: any, upload: any, chatLimiter: 
                     const cons = db.prepare("SELECT * FROM constituencies WHERE name = ?").get(user.constituency) as any;
                     if (cons) {
                         const reps = db.prepare("SELECT * FROM candidates WHERE constituency_id = ? AND incumbent = 1").all(cons.id);
-                        userContext = { user: { epic_number: user.epic_number, state: user.state, constituency: user.constituency }, constituency: cons, representatives: reps };
+                        userContext = { user: { epic_number: user.epic_number, state: user.state, constituency: user.constituency }, constituency: cons, representatives: reps, electionData };
                     } else {
-                        userContext = { user: { epic_number: user.epic_number, state: user.state, constituency: user.constituency } };
+                        userContext = { user: { epic_number: user.epic_number, state: user.state, constituency: user.constituency }, electionData };
                     }
                 } else {
-                    userContext = { user: user ? { epic_number: user.epic_number, state: user.state, constituency: user.constituency } : null };
+                    userContext = { user: user ? { epic_number: user.epic_number, state: user.state, constituency: user.constituency } : null, electionData };
                 }
             } else {
                 dbHistory = sess.chatHistory || [];
+                userContext = { electionData };
             }
     
             // Sliding window: keep only last 10 turns (20 entries: prompt + response)
