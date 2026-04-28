@@ -110,7 +110,7 @@ export function createApiRouter(db: any, logger: any, upload: any, chatLimiter: 
             res.send(htmlResponse);
         } catch(e: any) {
             logger.error({ err: e }, "Endpoint Error Processing Message");
-            res.send(generateErrorHtml(e.message || "An unexpected error occurred while processing your message."));
+            res.status(500).send(generateErrorHtml(e.message || "An unexpected error occurred while processing your message."));
         }
     });
 

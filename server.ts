@@ -50,13 +50,14 @@ const app = express();
 const PORT = 3000;
 const upload = multer();
 
+app.use(helmet({
+    contentSecurityPolicy: {
+        directives: {
+            "frame-ancestors": ["*"],
+        },
+    },
+}));
 app.set('trust proxy', 1);
-
-app.use((req, res, next) => {
-    res.setHeader('Content-Security-Policy', "frame-ancestors *");
-    res.removeHeader('X-Frame-Options');
-    next();
-});
 
 import { createApiRouter } from './src/routes/api.js';
 
@@ -76,18 +77,19 @@ declare module 'express-session' {
   }
 }
 
+const SQLiteStore = connectSqlite3(session);
+
 app.use(session({
     store: new SQLiteStore({ dir: './', db: 'data.db', table: 'sessions', concurrentDB: 'true' as any } as any) as any,
     secret: sessionSecret,
     resave: false,
     saveUninitialized: false,
     cookie: { 
-        secure: true, 
+        secure: process.env.NODE_ENV === 'production',
         httpOnly: true, 
-        sameSite: 'none' 
+        sameSite: 'lax' 
     }
 }));
-
 const db = new Database('data.db');
 db.exec(`
     CREATE TABLE IF NOT EXISTS users (
