@@ -7,7 +7,7 @@
     "node": ">=18.0.0"
   },
   "scripts": {
-    "dev": "concurrently \"npm run build:css -- --watch\" \"npm run copy-assets\" \"tsx server.ts\"",
+    "dev": "concurrently \"npm run build:css -- --watch\" \"npm run copy-assets\" \"tsx watch server.ts\"",
     "build:css": "npx @tailwindcss/cli -i ./src/input.css -o ./public/style.css --minify",
     "copy-assets": "node -e \"const fs=require('fs');fs.mkdirSync('public/js',{recursive:true});fs.copyFileSync('node_modules/htmx.org/dist/htmx.min.js','public/js/htmx.min.js');fs.copyFileSync('node_modules/alpinejs/dist/cdn.min.js','public/js/alpine.min.js')\"",
     "build": "npm run build:css && npm run copy-assets && tsc",

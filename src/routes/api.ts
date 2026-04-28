@@ -74,8 +74,8 @@ export function createApiRouter(db: any, logger: any, upload: any, chatLimiter: 
             }
     
             // Sliding window: keep only last 10 turns
-            if (dbHistory && dbHistory.length > 20) {
-                dbHistory = dbHistory.slice(-20);
+            if (dbHistory && dbHistory.length > 10) {
+                dbHistory = dbHistory.slice(-10);
             }
     
             const formattedHistory = dbHistory.map((item: any) => ({
@@ -91,8 +91,8 @@ export function createApiRouter(db: any, logger: any, upload: any, chatLimiter: 
             }));
             
             let safeNewHistory = serializableHistory;
-            if (safeNewHistory && safeNewHistory.length > 20) {
-                 safeNewHistory = safeNewHistory.slice(-20);
+            if (safeNewHistory && safeNewHistory.length > 10) {
+                 safeNewHistory = safeNewHistory.slice(-10);
             }
     
             if (sess.userId) {

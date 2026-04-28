@@ -230,7 +230,7 @@
 
             <!-- Input Area -->
             <div class="p-4 sm:p-6 bg-white border-t-2 border-[#1A1A1A] z-10 shrink-0">
-                <form id="chat-form" x-ref="chatForm" hx-post="/api/chat" hx-target="#chat-container" hx-swap="beforeend" hx-indicator="#loading-indicator" class="flex items-center gap-2 sm:gap-3" x-data="{ message: '', isPending: false }" @submit="if(!message.trim() || isPending) { $event.preventDefault(); return; }; isPending = true;" @gps-start.window="isPending = true" @gps-end.window="isPending = false" @chat-success.window="message = ''; isPending = false; $refs.chatInput.focus();" @chat-error.window="isPending = false;" @trigger-chat.window="message = $event.detail; setTimeout(() => htmx.trigger($el, 'submit'), 50);">
+                <form id="chat-form" x-ref="chatForm" hx-post="/api/chat" hx-target="#chat-container" hx-swap="beforeend" hx-indicator="#loading-indicator" hx-on::before-request="isPending = true" hx-on::after-request="isPending = false; message = ''; $refs.chatInput.focus();" class="flex items-center gap-2 sm:gap-3" x-data="{ message: '', isPending: false }" @submit="if(!message.trim()) { $event.preventDefault(); return; }" @gps-start.window="isPending = true" @gps-end.window="isPending = false" @trigger-chat.window="message = $event.detail; setTimeout(() => htmx.trigger($el, 'submit'), 50);">
                      <input type="hidden" name="lang" :value="$store.app.locale">
                      <button type="button" @click="$dispatch('request-location')" :disabled="isPending" class="w-12 h-12 flex items-center justify-center border-2 border-[#1A1A1A] text-[#1A1A1A] hover:bg-[#FF9933] hover:text-white transition-colors bg-[#F8F7F3] shadow-[4px_4px_0px_#1A1A1A] disabled:opacity-50 disabled:cursor-not-allowed hover:shadow-[2px_2px_0px_#1A1A1A] hover:translate-y-[2px] shrink-0 active:translate-y-[4px] active:shadow-none transition-all hidden sm:flex" aria-label="Share Location">
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
@@ -241,14 +241,11 @@
                         <input autofocus x-ref="chatInput" id="chat-input-field" type="text" name="message" x-model="message" required maxlength="500" :readonly="isPending" class="w-full bg-white border-2 border-[#1A1A1A] px-4 py-3 text-sm focus:outline-none focus:bg-[#F8F7F3] disabled:opacity-50 transition shadow-[4px_4px_0px_#1A1A1A] rounded-none italic placeholder:not-italic" :placeholder="$store.app.t('placeholder')" autocomplete="off">
                         <span class="absolute right-2 bottom-1 text-[10px] text-gray-500 font-mono" x-text="`${message.length}/500`"></span>
                     </div>
-                    <input id="api-key-input-field" type="password" name="apiKey" :readonly="isPending" class="w-32 sm:w-48 bg-white border-2 border-[#1A1A1A] px-2 py-3 text-xs focus:outline-none focus:bg-[#F8F7F3] disabled:opacity-50 shadow-[4px_4px_0px_#1A1A1A] rounded-none hidden sm:block" placeholder="API Key" autocomplete="off" x-data="{ localKey: localStorage.getItem('gemini_api_key') || '' }" x-model="localKey" x-on:change="localStorage.setItem('gemini_api_key', localKey)">
+
                     <button type="submit" class="w-12 h-12 bg-[#1A1A1A] text-white flex items-center justify-center border-2 border-[#1A1A1A] hover:bg-[#FF9933] transition-colors shadow-[4px_4px_0px_rgba(26,26,26,0.2)] hover:shadow-[2px_2px_0px_#1A1A1A] hover:translate-y-[2px] shrink-0 disabled:opacity-50 disabled:cursor-not-allowed active:translate-y-[4px] active:shadow-none transition-all" :disabled="!message.trim() || isPending" aria-label="Send Message">
                         <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"></path></svg>
                     </button>
-                    <!-- Cancel Button when pending -->
-                    <button type="button" x-show="isPending" @click="htmx.abort($refs.chatForm); document.getElementById('acquire-loader')?.remove(); $dispatch('chat-error');" class="w-12 h-12 bg-[#ea4335] text-white flex items-center justify-center border-2 border-[#1A1A1A] hover:bg-[#c5221f] transition-colors shadow-[4px_4px_0px_rgba(26,26,26,0.2)] hover:shadow-[2px_2px_0px_#1A1A1A] hover:translate-y-[2px] shrink-0 active:translate-y-[4px] active:shadow-none transition-all" aria-label="Cancel">
-                        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"></path></svg>
-                    </button>
+
                 </form>
             <!-- Suggestion Chips -->
             <div class="flex flex-wrap gap-x-2 gap-y-2 mt-4 sm:mt-6" x-data>

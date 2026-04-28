@@ -115,8 +115,7 @@ docker run -p 3000:3000 \
 
 - **Static election data only** — The app does not call any live ECI API. Data is frozen at the 2024 Lok Sabha results for 5 states. State assembly (Vidhan Sabha) elections are not covered.
 - **AI responses** — The Gemini model is grounded via Google Search for latest ECI rules, but it can still produce inaccurate booth addresses or schedule details. Always verify with the official [ECI Voter Portal](https://voters.eci.gov.in/).
-- **No push notifications** — The notification bell UI is present, but there is no background job, email, or Web Push pipeline. Notifications must be inserted directly into the `notifications` table.
-- **No OAuth** — Authentication is email + password only. Social login is out of scope.
+- **Token Management** — To conserve API quota, chat history is limited to the last 10 turns and output is capped at 500 tokens per request.
 - **SQLite not suitable for multi-replica deployments** — Use Turso or Postgres if running more than one container replica.
 
 ---

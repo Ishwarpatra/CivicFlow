@@ -18,7 +18,7 @@ export const getGeminiModel = (userApiKey?: string) => {
       return "MOCK_MODE";
   }
 
-  const ai = new GoogleGenAI({ apiKey });
+  const ai = new GoogleGenAI({ apiKey, apiVersion: 'v1' });
   if (!userApiKey) {
       genAiModels = ai;
   }

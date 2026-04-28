@@ -113,3 +113,36 @@ export const generateErrorHtml = (errorDetails: string) => {
     const safeError = DOMPurify.sanitize(errorDetails, { ALLOWED_TAGS: [] });
     return buildChatBubble('ERR', 'bg-[#ea4335]', 'bg-[#F8F7F3]', 'border-[#ea4335]', 'shadow-[4px_4px_0px_#ea4335]', 'text-[#ea4335] flex flex-col gap-2', `<p class="font-bold uppercase tracking-widest text-xs mb-2 text-[#1A1A1A]">System Error</p><p>${safeError}</p>`, 'mb-6 relative');
 };
+
+export function generateAdminLogsHtml(logs: any[], isPartial: boolean): string {
+    const rows = logs.map(log => {
+        const safeMsg = DOMPurify.sanitize(log.msg || '');
+        const safeErr = DOMPurify.sanitize(log.err ? log.err.message || JSON.stringify(log.err) : '');
+        return `
+        <tr class="border-b border-black hover:bg-gray-100">
+            <td class="p-2 text-xs font-mono">${new Date(log.time).toLocaleString()}</td>
+            <td class="p-2 text-xs font-bold ${log.level >= 50 ? 'text-red-600' : 'text-green-600'}">${log.level >= 50 ? 'ERR' : 'INFO'}</td>
+            <td class="p-2 text-xs break-all">${safeMsg}</td>
+            <td class="p-2 text-[10px] font-mono opacity-60">${safeErr}</td>
+        </tr>`;
+    }).join('');
+
+    if (isPartial) return rows;
+
+    return `
+        <div class="h-full flex flex-col bg-white border-2 border-black shadow-[4px_4px_0px_black]">
+            <div class="bg-black text-white p-3 flex justify-between items-center">
+                <h2 class="font-bold uppercase tracking-widest text-sm">System Logs</h2>
+                <button class="w-8 h-8 border-2 border-white hover:bg-white hover:text-black" @click="showAdminLogs = false">✕</button>
+            </div>
+            <div class="overflow-y-auto p-4 flex-1">
+                <table class="w-full text-left">
+                    <thead><tr class="bg-gray-200"><th>Time</th><th>Lvl</th><th>Message</th><th>Trace</th></tr></thead>
+                    <tbody hx-get="/api/admin/logs?partial=true" hx-trigger="every 5s [showAdminLogs]" hx-swap="outerHTML" hx-select="tbody">
+                        ${rows}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    `;
+}

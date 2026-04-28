@@ -48,8 +48,8 @@ export const handleChat = async (message: string, history: any[] = [], locale: s
             } else if (lowerMsg.includes("booth") || lowerMsg.includes("location") || lowerMsg.includes("where")) {
                 return { agentHtml: generateOfflineBoothHtml(), newHistory: history };
             } else {
-                 return { 
-                     agentHtml: `<div class="space-y-3"><p class="text-xs bg-[#FF9933] text-black px-2 py-1 inline-block uppercase font-bold tracking-widest shadow-[2px_2px_0px_#1A1A1A]">Demo Mode</p><p>You are chatting in Demo Mode (No API Key). I can answer basic questions about <strong>eligibility</strong> or finding your <strong>polling booth</strong>.</p><p class="text-sm border-t border-[#1A1A1A] pt-2 border-dashed">To unlock full AI capabilities, please add your <strong>GEMINI_API_KEY</strong> in the Secrets menu.</p></div>`, 
+                  return { 
+                     agentHtml: `<div class="space-y-3"><p class="text-xs bg-[#FF9933] text-black px-2 py-1 inline-block uppercase font-bold tracking-widest shadow-[2px_2px_0px_#1A1A1A]">Demo Mode</p><p>You are chatting in Demo Mode. I can answer basic questions about <strong>eligibility</strong> or finding your <strong>polling booth</strong>.</p><p class="text-sm border-t border-[#1A1A1A] pt-2 border-dashed">To unlock full AI capabilities, please ensure a valid <strong>GEMINI_API_KEY</strong> is configured on the server.</p></div>`, 
                      newHistory: history 
                  };
             }
@@ -76,14 +76,16 @@ export const handleChat = async (message: string, history: any[] = [], locale: s
         const contents = [...cleanHistory, { role: 'user', parts: [{ text: message }] }];
 
         const response = await ai.models.generateContent({
-             model: 'gemini-1.5-flash', // Pin to a specific model version supported by current SDK
+             model: 'gemini-2.5-flash', 
              contents: contents,
              config: {
-                 systemInstruction: instructions,
-                 tools: [
-                     { googleSearch: {} } 
-                 ]
-             }
+                 system_instruction: instructions,
+                 max_output_tokens: 500,
+                 temperature: 0.7,
+             },
+             tools: [
+                 { google_search: {} } 
+             ]
         });
 
         responseText = response.text || "I encountered an issue generating a response.";

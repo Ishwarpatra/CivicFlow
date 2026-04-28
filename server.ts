@@ -18,7 +18,7 @@ import csurf from 'csurf';
 import cors from 'cors';
 
 import { handleChat } from './src/chatHandler.js';
-import { generateErrorHtml } from './src/uiTemplates.js';
+import { generateErrorHtml, generateAdminLogsHtml } from './src/uiTemplates.js';
 import { validateEnv } from './src/utils/validateEnv.js';
 import { createApiRouter } from './src/routes/api.js';
 
@@ -338,36 +338,8 @@ app.get('/api/admin/logs', csrfProtection, async (req: express.Request, res: exp
             if (logs.length > 500) logs.shift(); // keep memory low
         }
 
-        const rows = logs.reverse().slice(0, 100).map(log => {
-            const safeMsg = DOMPurify.sanitize(log.msg || '');
-            const safeErr = DOMPurify.sanitize(log.err ? log.err.message || JSON.stringify(log.err) : '');
-            return `
-            <tr class="border-b border-black hover:bg-gray-100">
-                <td class="p-2 text-xs font-mono">${new Date(log.time).toLocaleString()}</td>
-                <td class="p-2 text-xs font-bold ${log.level >= 50 ? 'text-red-600' : 'text-green-600'}">${log.level >= 50 ? 'ERR' : 'INFO'}</td>
-                <td class="p-2 text-xs break-all">${safeMsg}</td>
-                <td class="p-2 text-[10px] font-mono opacity-60">${safeErr}</td>
-            </tr>`;
-        }).join('');
-
-        if (req.query.partial === 'true') return res.send(rows);
-
-        res.send(`
-            <div class="h-full flex flex-col bg-white border-2 border-black shadow-[4px_4px_0px_black]">
-                <div class="bg-black text-white p-3 flex justify-between items-center">
-                    <h2 class="font-bold uppercase tracking-widest text-sm">System Logs</h2>
-                    <button class="w-8 h-8 border-2 border-white hover:bg-white hover:text-black" @click="showAdminLogs = false">✕</button>
-                </div>
-                <div class="overflow-y-auto p-4 flex-1">
-                    <table class="w-full text-left">
-                        <thead><tr class="bg-gray-200"><th>Time</th><th>Lvl</th><th>Message</th><th>Trace</th></tr></thead>
-                        <tbody hx-get="/api/admin/logs?partial=true" hx-trigger="every 5s [showAdminLogs]" hx-swap="outerHTML" hx-select="tbody">
-                            ${rows}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        `);
+        const html = generateAdminLogsHtml(logs.reverse().slice(0, 100), req.query.partial === 'true');
+        res.send(html);
     } catch (e) {
          res.status(500).send("Error reading logs");
     }
