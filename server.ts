@@ -41,6 +41,7 @@ if (process.env.NODE_ENV === 'production' && !process.env.SESSION_SECRET) {
 
 const sessionSecret = process.env.SESSION_SECRET || 'dev-secret-only';
 const logger = pino({
+    redact: ['err.config.data', 'req.body.message', 'req.body.epic_number', 'req.body.password', 'epic_number', 'password'],
     transport: {
         targets: [
             { target: 'pino-pretty', options: { colorize: true } },
@@ -68,20 +69,29 @@ const db = new Database('data.db');
 db.exec(`
     CREATE TABLE IF NOT EXISTS users (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        email TEXT UNIQUE,
-        password TEXT,
+        email TEXT UNIQUE NOT NULL,
+        password_hash TEXT NOT NULL,
+        role TEXT DEFAULT 'voter',
         epic_number TEXT,
         state TEXT,
-        constituency TEXT
+        constituency TEXT,
+        language_preference TEXT DEFAULT 'en',
+        prompt_credits INTEGER DEFAULT 0
     );
     CREATE TABLE IF NOT EXISTS votes (
-        user_id INTEGER UNIQUE,
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        election_id TEXT DEFAULT 'general_2026',
+        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(user_id, election_id),
         FOREIGN KEY(user_id) REFERENCES users(id)
     );
     CREATE TABLE IF NOT EXISTS chat_sessions (
-        user_id INTEGER PRIMARY KEY,
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
         history TEXT,
-        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY(user_id) REFERENCES users(id)
     );
     CREATE TABLE IF NOT EXISTS constituencies (
         id INTEGER PRIMARY KEY,
@@ -187,8 +197,19 @@ try {
     }
 } catch(e) {}
 
+app.get('/api/auth/me', (req, res) => {
+    if (!req.session.userId) return res.json({ success: false });
+    const user = db.prepare("SELECT email, role, prompt_credits FROM users WHERE id = ?").get(req.session.userId) as any;
+    if (user) {
+        res.json({ success: true, user: { email: user.email, role: user.role, credits: user.prompt_credits } });
+    } else {
+        res.json({ success: false });
+    }
+});
+
 app.post('/api/register', csrfProtection, async (req, res) => {
-    const { email, password } = req.body;
+    const email = req.body.email ? String(req.body.email) : '';
+    const password = req.body.password ? String(req.body.password) : '';
     if (!email || !email.includes('@') || email.length > 255) {
         return res.status(400).json({ success: false, message: 'Invalid email format' });
     }
@@ -204,7 +225,7 @@ app.post('/api/register', csrfProtection, async (req, res) => {
         sess.userId = Number(result.lastInsertRowid);
         sess.email = email;
         sess.role = 'voter';
-        res.json({ success: true, email: email, role: 'voter' });
+        res.json({ success: true, email: email, role: 'voter', credits: 0 });
     } catch (e: any) {
         if (e.message.includes('UNIQUE constraint failed')) {
             res.status(400).json({ success: false, message: 'Email already registered' });
@@ -215,8 +236,9 @@ app.post('/api/register', csrfProtection, async (req, res) => {
 });
 
 app.post('/api/login', csrfProtection, async (req, res) => {
-    const { email, password } = req.body;
-    if (!email || typeof email !== 'string' || !password || typeof password !== 'string') {
+    const email = req.body.email ? String(req.body.email) : '';
+    const password = req.body.password ? String(req.body.password) : '';
+    if (!email || !password) {
         return res.status(400).json({ success: false, message: 'Missing credentials' });
     }
 
@@ -235,7 +257,7 @@ app.post('/api/login', csrfProtection, async (req, res) => {
         sess.userId = user.id;
         sess.email = user.email;
         sess.role = user.role;
-        res.json({ success: true, email: user.email, role: user.role });
+        res.json({ success: true, email: user.email, role: user.role, credits: user.prompt_credits });
     } catch (e: any) {
         logger.error({ err: e }, "Login Error");
         res.status(500).json({ success: false, message: 'Internal server error' });
@@ -253,13 +275,16 @@ app.post('/api/settings', csrfProtection, (req, res) => {
     const sess = req.session;
     if (!sess.userId) return res.status(401).json({ success: false, message: 'Unauthorized' });
     
-    const { epic_number, state, constituency, language_preference } = req.body;
+    const epic_number = req.body.epic_number ? String(req.body.epic_number) : null;
+    const state = req.body.state ? String(req.body.state) : null;
+    const constituency = req.body.constituency ? String(req.body.constituency) : null;
+    const language_preference = req.body.language_preference ? String(req.body.language_preference) : 'en';
     try {
         db.prepare(`
             UPDATE users 
             SET epic_number = ?, state = ?, constituency = ?, language_preference = ? 
             WHERE id = ?
-        `).run(epic_number || null, state || null, constituency || null, language_preference || 'en', sess.userId);
+        `).run(epic_number, state, constituency, language_preference, sess.userId);
         res.json({ success: true });
     } catch(e) {
         logger.error({ err: e }, "Settings Error");
@@ -276,7 +301,7 @@ app.get('/api/notifications', csrfProtection, (req, res) => {
 app.post('/api/notifications/read', csrfProtection, express.json(), (req, res) => {
     const sess = req.session;
     if (!sess.userId) return res.status(401).json({ success: false, message: 'Unauthorized' });
-    const { notification_id } = req.body;
+    const notification_id = req.body.notification_id ? String(req.body.notification_id) : null;
     try {
         if (notification_id) {
             db.prepare("UPDATE notifications SET is_read = 1 WHERE id = ? AND user_id = ?").run(notification_id, sess.userId);

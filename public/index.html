@@ -4,39 +4,17 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>CivicFlow: The Intelligent Indian Election Navigator</title>
+    <!-- OpenGraph Virality Meta Tags -->
+    <meta property="og:title" content="CivicFlow: AI Election Navigator">
+    <meta property="og:description" content="Check eligibility, find your polling booth, and know your representatives in seconds.">
+    <meta property="og:image" content="https://storage.googleapis.com/antigravity-assets/civicflow-og.png">
+    <meta property="og:url" content="https://civicflow.in">
+    <meta property="og:type" content="website">
     <!-- HTMX for AJAX -->
     <script src="/js/htmx.min.js"></script>
-    <!-- Alpine.js for UI reactivity -->
-    <script defer src="/js/alpine.min.js"></script>
-    <script defer>
-        document.addEventListener('alpine:init', () => {
-            Alpine.store('app', {
-                locale: localStorage.getItem('locale') || 'en',
-                setLocale(lang) {
-                    this.locale = lang;
-                    localStorage.setItem('locale', lang);
-                },
-                csrfToken: '',
-                t(key) {
-                    return dict[this.locale]?.[key] || key;
-                }
-            });
-
-            // Sync locale with HTML element
-            Alpine.effect(() => {
-                document.documentElement.lang = Alpine.store('app').locale;
-            });
-
-            // Fetch CSRF token once initialized
-            fetch('/api/csrf', { headers: { 'CSRF-Token': '' } }).then(r => r.json()).then(data => {
-                Alpine.store('app').csrfToken = data.csrfToken;
-                document.body.addEventListener('htmx:configRequest', (event) => {
-                    event.detail.headers['CSRF-Token'] = data.csrfToken;
-                });
-            });
-        });
-    </script>
-    <link rel="stylesheet" href="/style.css">
+    <style>
+        [x-cloak] { display: none !important; }
+    </style>
     <script>
         const dict = {
             en: {
@@ -64,7 +42,35 @@
                 welcome: "नमस्कार! मैं आपका सिविकफ्लो नेविगेटर हूँ। मैं आपको आपकी मतदान पात्रता जांचने, अपना मतदान केंद्र ढूंढने, या आपके प्रतिनिधि के बारे में जानने में मदद कर सकता हूँ। आप क्या करना चाहेंगे?"
             }
         };
+
+        document.addEventListener('alpine:init', () => {
+            Alpine.store('app', {
+                locale: localStorage.getItem('locale') || 'en',
+                setLocale(lang) {
+                    this.locale = lang;
+                    localStorage.setItem('locale', lang);
+                    document.documentElement.lang = lang;
+                },
+                csrfToken: '',
+                t(key) {
+                    return dict[this.locale]?.[key] || key;
+                }
+            });
+
+            // Sync locale with HTML element initially
+            document.documentElement.lang = Alpine.store('app').locale;
+
+            // Fetch CSRF token once initialized
+            fetch('/api/csrf', { headers: { 'CSRF-Token': '' } }).then(r => r.json()).then(data => {
+                Alpine.store('app').csrfToken = data.csrfToken;
+                document.body.addEventListener('htmx:configRequest', (event) => {
+                    event.detail.headers['CSRF-Token'] = data.csrfToken;
+                });
+            });
+        });
     </script>
+    <script defer src="/js/alpine.min.js"></script>
+    <link rel="stylesheet" href="/style.css">
 </head>
 <body class="bg-[#F8F7F3] text-[#1A1A1A] font-sans antialiased flex flex-col items-center justify-center min-h-screen">
 
@@ -85,7 +91,9 @@
                  </select>
              </div>
              <div class="w-px h-8 bg-[#1A1A1A] opacity-20 hidden sm:block"></div>
-             <div x-data="{ user: null, open: false, showSettings: false, notifs: [], showNotifs: false }" @auth-changed.window="user = $event.detail; status = 1; if(user) { fetch('/api/notifications', {headers: {'CSRF-Token': $store.app.csrfToken}}).then(r => r.json()).then(d => { if(d.success) notifs = d.notifications; }) }" class="relative flex items-center gap-2">
+             <div x-data="{ user: null, open: false, showSettings: false, notifs: [], showNotifs: false }" 
+                  x-init="fetch('/api/auth/me').then(r=>r.json()).then(d=>{if(d.success) document.dispatchEvent(new CustomEvent('auth-changed', {detail: d.user}))})"
+                  @auth-changed.window="user = $event.detail; status = 1; if(user) { fetch('/api/notifications', {headers: {'CSRF-Token': $store.app.csrfToken}}).then(r => r.json()).then(d => { if(d.success) notifs = d.notifications; }) }" class="relative flex items-center gap-2">
                  <template x-if="user">
                      <div class="flex items-center gap-2">
                          <div class="relative">
@@ -95,7 +103,7 @@
                                         <span class="absolute -top-1 -right-1 w-3 h-3 bg-[#ea4335] rounded-full animate-bounce border border-white"></span>
                                    </template>
                               </button>
-                              <div x-show="showNotifs" @click.away="showNotifs = false" class="absolute right-0 mt-2 w-64 bg-white border-2 border-[#1A1A1A] shadow-[4px_4px_0px_#1A1A1A] max-h-64 overflow-y-auto z-50">
+                              <div x-show="showNotifs" x-cloak @click.away="showNotifs = false" class="absolute right-0 mt-2 w-64 bg-white border-2 border-[#1A1A1A] shadow-[4px_4px_0px_#1A1A1A] max-h-64 overflow-y-auto z-50">
                                    <template x-if="notifs.length === 0">
                                        <div class="p-3 text-xs text-center">No notifications</div>
                                    </template>
@@ -107,9 +115,12 @@
                                    </template>
                               </div>
                          </div>
-                         <div class="relative">
+                         <div class="relative flex items-center gap-2">
+                             <div class="text-[10px] font-bold uppercase tracking-widest text-[#1A1A1A] bg-[#FF9933] px-2 py-1 shadow-[2px_2px_0px_#1A1A1A] border-2 border-[#1A1A1A]">
+                                 <span x-text="user.credits || 0"></span> CREDITS
+                             </div>
                              <button @click="open = !open" class="w-10 h-10 bg-[#1A1A1A] border-2 border-[#1A1A1A] flex items-center justify-center text-sm font-bold text-white shadow-[2px_2px_0px_#FF9933] cursor-pointer" x-text="user.email.charAt(0).toUpperCase()"></button>
-                             <div x-show="open" @click.away="open = false" class="absolute right-0 mt-2 w-48 bg-white border-2 border-[#1A1A1A] shadow-[4px_4px_0px_#1A1A1A] p-2 z-50 flex flex-col gap-2">
+                             <div x-show="open" x-cloak @click.away="open = false" class="absolute right-0 mt-2 w-48 bg-white border-2 border-[#1A1A1A] shadow-[4px_4px_0px_#1A1A1A] p-2 z-50 flex flex-col gap-2 top-10">
                                  <div class="text-xs opacity-70 p-2 truncate" x-text="user.email"></div>
                                  <button @click="showSettings = true; open = false;" class="w-full text-left px-2 py-2 text-xs font-bold uppercase hover:bg-[#F0F0F0] text-[#1A1A1A] transition-colors border-t border-[#1A1A1A]">Settings</button>
                                  <template x-if="user.role === 'admin'">
@@ -123,7 +134,7 @@
                          </div>
                          
                          <!-- Settings Modal -->
-                         <div x-show="showSettings" style="display:none" class="fixed inset-0 bg-black/50 z-[200] flex justify-center items-center">
+                         <div x-show="showSettings" x-cloak class="fixed inset-0 bg-black/50 z-[200] flex justify-center items-center">
                              <div @click.away="showSettings = false" class="bg-white border-2 border-[#1A1A1A] shadow-[8px_8px_0px_#1A1A1A] p-6 w-96 max-w-[90vw]" x-data="{ formData: {epic_number: '', state: '', constituency: '', language_preference: 'en'} }" x-init="$watch('showSettings', v => { if(v) fetch('/api/settings',{headers: {'CSRF-Token': $store.app.csrfToken}}).then(r=>r.json()).then(d => {if(d.success) formData = d.settings || formData}) })">
                                   <h2 class="text-[#1A1A1A] uppercase tracking-widest font-black text-xl border-b-2 border-[#1A1A1A] pb-2 mb-4">Settings</h2>
                                   <div class="space-y-4">
@@ -145,7 +156,7 @@
                         <button type="button" @click="showAuth = true; isLogin = true" class="px-4 sm:px-6 py-2 bg-[#1A1A1A] text-white text-[10px] sm:text-xs font-bold uppercase tracking-widest hover:bg-[#FF9933] transition-colors border-2 border-[#1A1A1A] shadow-[4px_4px_0px_#1A1A1A] hover:shadow-[2px_2px_0px_#1A1A1A] hover:translate-y-[2px] active:translate-y-[4px] active:shadow-none transition-all" x-text="$store.app.t('login')">Log In</button>
                         
                         <!-- Auth Modal -->
-                        <div x-show="showAuth" style="display:none" class="fixed inset-0 bg-black/50 z-[200] flex justify-center items-center">
+                        <div x-show="showAuth" x-cloak class="fixed inset-0 bg-black/50 z-[200] flex justify-center items-center">
                             <div @click.away="showAuth = false" class="bg-white border-2 border-[#1A1A1A] shadow-[8px_8px_0px_#1A1A1A] p-6 w-96 max-w-[90vw]">
                                 <div class="flex justify-between items-center border-b-2 border-[#1A1A1A] pb-2 mb-4">
                                     <h2 class="text-[#1A1A1A] uppercase tracking-widest font-black text-xl" x-text="isLogin ? 'Login' : 'Register'"></h2>
@@ -192,7 +203,7 @@
                 
                 <!-- Civic Pulse Skeleton -->
                 <div class="flex-1 bg-white p-3 border-2 border-[#1A1A1A] shadow-[4px_4px_0px_#1A1A1A] flex flex-col justify-center gap-2">
-                    <span class="uppercase tracking-widest font-bold text-[9px] text-[#4285f4]" x-text="$store.app.t('synthesizing')">Synthesizing with Vertex AI...</span>
+                    <span class="uppercase tracking-widest font-bold text-[9px] text-[#4285f4]" x-text="$store.app.t('synthesizing')">Analyzing civic data...</span>
                     <div class="w-full h-3 rounded-sm civic-skeleton border border-gray-200"></div>
                 </div>
             </div>
@@ -215,7 +226,7 @@
                         <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"></path></svg>
                     </button>
                     <!-- Cancel Button when pending -->
-                    <button type="button" x-show="isPending" @click="htmx.trigger('#chat-form', 'htmx:abort'); document.getElementById('acquire-loader')?.remove(); $dispatch('chat-error');" class="w-12 h-12 bg-[#ea4335] text-white flex items-center justify-center border-2 border-[#1A1A1A] hover:bg-[#c5221f] transition-colors shadow-[4px_4px_0px_rgba(26,26,26,0.2)] hover:shadow-[2px_2px_0px_#1A1A1A] hover:translate-y-[2px] shrink-0 active:translate-y-[4px] active:shadow-none transition-all" aria-label="Cancel">
+                    <button type="button" x-show="isPending" @click="$refs.chatForm.dispatchEvent(new Event('htmx:abort')); document.getElementById('acquire-loader')?.remove(); $dispatch('chat-error');" class="w-12 h-12 bg-[#ea4335] text-white flex items-center justify-center border-2 border-[#1A1A1A] hover:bg-[#c5221f] transition-colors shadow-[4px_4px_0px_rgba(26,26,26,0.2)] hover:shadow-[2px_2px_0px_#1A1A1A] hover:translate-y-[2px] shrink-0 active:translate-y-[4px] active:shadow-none transition-all" aria-label="Cancel">
                         <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"></path></svg>
                     </button>
                 </form>
@@ -289,10 +300,19 @@
         }
     });
 
+    document.body.addEventListener('htmx:beforeSwap', function(evt) {
+        if (evt.detail.xhr.status >= 400 && evt.detail.xhr.status < 600) {
+            evt.detail.shouldSwap = true;
+            evt.detail.isError = false;
+        }
+    });
+
     // Handle HTMX successful swap and clear message
     document.body.addEventListener('htmx:afterSwap', function(evt) {
         if(evt.detail.target.id === 'chat-container') {
-             if (evt.detail.successful) {
+             if (evt.detail.xhr.status >= 400) {
+                 document.dispatchEvent(new CustomEvent('chat-error'));
+             } else if (evt.detail.successful) {
                  document.dispatchEvent(new CustomEvent('chat-success'));
              } else {
                  document.dispatchEvent(new CustomEvent('chat-error'));
@@ -312,7 +332,7 @@
 
     <!-- Admin Log Panel -->
     <div x-data="{ showAdminLogs: false }" 
-         x-show="showAdminLogs" 
+         x-show="showAdminLogs" x-cloak 
          @open-admin-logs.window="showAdminLogs = true; htmx.ajax('GET', '/api/admin/logs', { target: '#admin-panel' })"
          @auth-changed.window="if(!$event.detail || $event.detail.role !== 'admin') showAdminLogs = false"
          class="fixed inset-0 z-[100] flex justify-end bg-black bg-opacity-50 transition-opacity"
@@ -321,8 +341,7 @@
          x-transition:enter-end="opacity-100"
          x-transition:leave="transition ease-in duration-200"
          x-transition:leave-start="opacity-100"
-         x-transition:leave-end="opacity-0"
-         style="display: none;">
+         x-transition:leave-end="opacity-0">
          <div class="w-full md:w-3/4 lg:w-1/2 h-full bg-[#F8F7F3] border-l-4 border-[#1A1A1A] shadow-[-10px_0px_0px_rgba(26,26,26,0.1)] flex flex-col transform transition-transform"
               x-transition:enter="transition ease-out duration-300"
               x-transition:enter-start="translate-x-full"

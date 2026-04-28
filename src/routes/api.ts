@@ -16,6 +16,7 @@ export function createApiRouter(db: any, logger: any, upload: any, chatLimiter: 
     const router = express.Router();
 
     router.post('/chat', chatLimiter, csrfProtection, upload.none(), async (req, res) => {
+        let htmlResponse = "";
         try {
             const validationResult = chatSchema.safeParse(req.body);
             if (!validationResult.success) {
@@ -30,7 +31,11 @@ export function createApiRouter(db: any, logger: any, upload: any, chatLimiter: 
                 messageLength: message.length,
             }, "Incoming chat request");
             
-            let htmlResponse = "";
+            // Give Prompt Credits for civic actions
+            if (sess.userId && (message.startsWith(SYSTEM_CONSTANTS.COMMANDS.FIND_BOOTH_LOCATION) || message === SYSTEM_CONSTANTS.COMMANDS.KNOW_REP)) {
+                db.prepare("UPDATE users SET prompt_credits = prompt_credits + 10 WHERE id = ?").run(sess.userId);
+                htmlResponse += `<script>document.dispatchEvent(new CustomEvent('update-credits', { detail: 10 }));</script>`;
+            }
             
             // Escape and Echo user message to the UI
             if(!message.startsWith(SYSTEM_CONSTANTS.COMMANDS.FIND_BOOTH_LOCATION) && 
@@ -105,7 +110,7 @@ export function createApiRouter(db: any, logger: any, upload: any, chatLimiter: 
             res.send(htmlResponse);
         } catch(e: any) {
             logger.error({ err: e }, "Endpoint Error Processing Message");
-            res.status(500).send(generateErrorHtml(e.message || "An unexpected error occurred while processing your message."));
+            res.status(500).send(htmlResponse + generateErrorHtml(e.message || "An unexpected error occurred while processing your message."));
         }
     });
 

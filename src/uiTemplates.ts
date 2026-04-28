@@ -26,7 +26,7 @@ export const generateSequoiaPitchHtml = () => `
 export const generateRepInsightsHtml = () => `
     <div class="space-y-6">
         <div class="p-4 bg-white border-2 border-[#1A1A1A] shadow-[4px_4px_0px_#1A1A1A] relative overflow-hidden group">
-            <div class="absolute top-0 right-0 w-16 h-16 bg-[#FF9933] transform rotate-45 translate-x-8 -translate-y-8 border-l-2 border-b-2 border-[#1A1A1A]"></div>
+            <div class="absolute top-0 right-0 py-1 px-8 bg-[#ea4335] text-white text-[10px] font-bold tracking-widest transform rotate-45 translate-x-6 translate-y-2 border-y-2 border-[#1A1A1A]">STATIC DEMO</div>
             <h3 class="text-xl font-bold uppercase tracking-widest text-[#1A1A1A] mb-1">Hon. Prashant Kishore</h3>
             <p class="text-xs uppercase opacity-90 mb-4 bg-[#FF9933] text-white inline-block px-2 py-0.5 font-bold border border-[#1A1A1A]">South Chennai District</p>
             
