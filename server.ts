@@ -174,10 +174,10 @@ const chatLimiter = rateLimit({
 import csurf from 'csurf';
 
 app.use(express.static(path.join(process.cwd(), 'public')));
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: '100kb' }));
+app.use(express.urlencoded({ limit: '100kb', extended: true }));
 
-const csrfProtection = csurf({ cookie: false });
+const csrfProtection = csurf({ cookie: { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax' } });
 
 const apiRouter = createApiRouter(db, logger, upload, chatLimiter, csrfProtection);
 app.use('/api', apiRouter);

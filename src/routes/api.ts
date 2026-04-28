@@ -1,40 +1,34 @@
-
 import express from 'express';
 import bcrypt from 'bcrypt';
 import DOMPurify from 'isomorphic-dompurify';
+import { z } from 'zod';
 import { generateUserMessageHtml, generateAgentMessageHtml, generateErrorHtml } from '../uiTemplates.js';
 import { handleChat } from '../chatHandler.js';
 import { SYSTEM_CONSTANTS } from '../constants.js';
+
+const chatSchema = z.object({
+    message: z.string().min(1).max(500),
+    lang: z.enum(['en', 'hi']).optional(),
+    apiKey: z.string().max(255).optional(),
+});
 
 export function createApiRouter(db: any, logger: any, upload: any, chatLimiter: any, csrfProtection: any) {
     const router = express.Router();
 
     router.post('/chat', chatLimiter, csrfProtection, upload.none(), async (req, res) => {
         try {
-            const message = req.body.message;
-            let locale = req.body.lang || req.query.lang || 'en';
-            if (!['en', 'hi'].includes(locale)) {
-                locale = 'en';
+            const validationResult = chatSchema.safeParse(req.body);
+            if (!validationResult.success) {
+                return res.status(400).send(generateErrorHtml("Invalid input format."));
             }
-            const apiKey = req.body.apiKey;
-            if (apiKey && (typeof apiKey !== 'string' || apiKey.length > 255)) {
-                return res.send(generateErrorHtml("Invalid API key format."));
-            }
+            const { message, lang, apiKey } = validationResult.data;
+            const locale = lang || req.query.lang || 'en';
             
             const sess = req.session;
             logger.info({
                 userId: sess.userId || 'anonymous',
-                email: sess.email || null,
-                messageLength: message ? message.length : 0,
-                isCommand: message && typeof message === 'string' && (message.startsWith(SYSTEM_CONSTANTS.COMMANDS.FIND_BOOTH_LOCATION) || message === SYSTEM_CONSTANTS.COMMANDS.START_PITCH || message === SYSTEM_CONSTANTS.COMMANDS.KNOW_REP)
+                messageLength: message.length,
             }, "Incoming chat request");
-
-            if (!message || typeof message !== "string") {
-                 return res.send(generateErrorHtml("Message must be a valid string"));
-            }
-            if (message.length > 500) {
-                 return res.send(generateErrorHtml("Message length cannot exceed 500 characters."));
-            }
             
             let htmlResponse = "";
             
@@ -71,6 +65,7 @@ export function createApiRouter(db: any, logger: any, upload: any, chatLimiter: 
                 dbHistory = sess.chatHistory || [];
             }
     
+            // Sliding window: keep only last 10 turns (20 entries: prompt + response)
             if (dbHistory && dbHistory.length > 20) {
                 dbHistory = dbHistory.slice(-20);
             }
@@ -86,7 +81,7 @@ export function createApiRouter(db: any, logger: any, upload: any, chatLimiter: 
             // Convert API format back to simple object for storage
             const serializableHistory = newHistory.map((item: any) => ({
                 role: item.role,
-                parts: item.parts[0].text,
+                parts: item.parts?.[0]?.text || "",
             }));
             
             let safeNewHistory = serializableHistory;
