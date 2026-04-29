@@ -1,9 +1,32 @@
 <!DOCTYPE html>
-<html lang="en">
+<html x-data :lang="$store.app ? $store.app.locale : 'en'">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CivicFlow: The Intelligent Indian Election Navigator</title>
+    <title>CivicFlow | Intelligent Indian Election Navigator</title>
+    <!-- Google Analytics 4 (Google Services Integration) -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-XXXXXXXXXX"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'G-XXXXXXXXXX');
+      // Track civic action events
+      function trackCivicEvent(action) { gtag('event', action, { event_category: 'civic_engagement' }); }
+    </script>
+    <!-- Google Maps JavaScript API (loaded dynamically when booth lookup is triggered) -->
+    <script>
+      window.__mapsApiKey = '';
+      function loadGoogleMaps(key) {
+        if (key && !document.getElementById('gmap-script')) {
+          const s = document.createElement('script');
+          s.id = 'gmap-script';
+          s.src = `https://maps.googleapis.com/maps/api/js?key=${key}&libraries=places`;
+          s.async = true;
+          document.head.appendChild(s);
+        }
+      }
+    </script>
     <!-- OpenGraph Virality Meta Tags -->
     <meta property="og:title" content="CivicFlow: AI Election Navigator">
     <meta property="og:description" content="Check eligibility, find your polling booth, and know your representatives in seconds.">
@@ -210,6 +233,10 @@
                         Namaskar! I'm your CivicFlow Navigator. I can help you check your voting eligibility, find your polling booth, or know your representative. What would you like to do?
                     </div>
                 </div>
+            </div>
+            <!-- Civic Data Attribution -->
+            <div class="px-4 sm:px-8 py-1 text-center">
+                <p class="text-[9px] opacity-40 uppercase tracking-widest font-bold">Data sourced from Election Commission of India &amp; Google Civic API · Powered by Gemini AI</p>
             </div>
 
             <!-- Loading Indicator with Gemini Sparkle and Civic Pulse Skeleton -->
