@@ -36,8 +36,20 @@ declare module 'express-session' {
 
 dotenv.config();
 
-// --- Enhanced Startup Diagnostics ---
+// --- Logger Setup ---
 const isProd = process.env.NODE_ENV === 'production';
+const logger = pino({
+    level: process.env.LOG_LEVEL || 'info',
+    redact: ['req.headers.cookie', 'req.body.password', 'password'],
+    transport: {
+        targets: [
+            ...(isProd ? [] : [{ target: 'pino-pretty', options: { colorize: true } }]),
+            { target: 'pino/file', options: { destination: './app.log' } }
+        ]
+    }
+});
+
+// --- Enhanced Startup Diagnostics ---
 logger.info({ 
     env: {
         NODE_ENV: process.env.NODE_ENV,
@@ -64,17 +76,6 @@ const app = express();
 const PORT = parseInt(process.env.PORT || '8080', 10);
 const upload = multer();
 
-// --- Logger Setup ---
-const logger = pino({
-    level: process.env.LOG_LEVEL || 'info',
-    redact: ['req.headers.cookie', 'req.body.password', 'password'],
-    transport: {
-        targets: [
-            ...(isProd ? [] : [{ target: 'pino-pretty', options: { colorize: true } }]),
-            { target: 'pino/file', options: { destination: './app.log' } }
-        ]
-    }
-});
 
 // --- Security Middleware ---
 app.use(helmet({
