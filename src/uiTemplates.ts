@@ -114,6 +114,12 @@ export const generateErrorHtml = (errorDetails: string) => {
     return buildChatBubble('ERR', 'bg-[#ea4335]', 'bg-[#F8F7F3]', 'border-[#ea4335]', 'shadow-[4px_4px_0px_#ea4335]', 'text-[#ea4335] flex flex-col gap-2', `<p class="font-bold uppercase tracking-widest text-xs mb-2 text-[#1A1A1A]">System Error</p><p>${safeError}</p>`, 'mb-6 relative');
 };
 
+export const generateVoteSuccessHtml = () => `<button disabled class="m3-button-voted">VOTED</button>`;
+export const generateAlreadyVotedHtml = () => `<button disabled class="m3-button-voted">ALREADY VOTED</button>`;
+export const generateVoteErrorHtml = () => `<button disabled class="m3-button-error">Error recording vote</button>`;
+export const generateLoginToVoteHtml = () => `<button disabled class="m3-button-disabled">Log in to vote</button>`;
+export const generateCreditUpdateScript = (amount: number) => `<script>document.dispatchEvent(new CustomEvent('update-credits', { detail: ${amount} }));</script>`;
+
 export function generateAdminLogsHtml(logs: any[], isPartial: boolean): string {
     const rows = logs.map(log => {
         const safeMsg = DOMPurify.sanitize(log.msg || '');

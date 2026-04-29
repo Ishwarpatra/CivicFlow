@@ -46,12 +46,12 @@ export async function fetchRepresentativesByAddress(address: string): Promise<Ci
             return { representatives: [], source: 'fallback', error: `Civic API error: ${response.status}` };
         }
 
-        const data = await response.json() as any;
+        const data = await response.json() as { offices?: any[], officials?: any[], normalizedInput?: any };
 
         // Map offices → officials
         const reps: CivicRepresentative[] = [];
-        const offices: any[] = data.offices || [];
-        const officials: any[] = data.officials || [];
+        const offices = data.offices || [];
+        const officials = data.officials || [];
 
         for (const office of offices) {
             const indices: number[] = office.officialIndices || [];
@@ -99,8 +99,8 @@ export async function fetchPollingLocationsByAddress(address: string): Promise<C
             return { representatives: [], source: 'fallback', error: `Civic API error: ${response.status}` };
         }
 
-        const data = await response.json() as any;
-        const locations: { address: string; name: string }[] = (data.pollingLocations || []).map((loc: any) => ({
+        const data = await response.json() as { pollingLocations?: any[] };
+        const locations: { address: string; name: string }[] = (data.pollingLocations || []).map((loc) => ({
             name: loc.address?.locationName || 'Polling Location',
             address: [loc.address?.line1, loc.address?.city, loc.address?.state].filter(Boolean).join(', '),
         }));

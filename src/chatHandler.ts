@@ -10,8 +10,9 @@ import {
 } from "./uiTemplates.js";
 import { SYSTEM_CONSTANTS } from "./constants.js";
 import { fetchRepresentativesByAddress } from "./civicApiService.js";
+import { ChatHistoryItem, UserContext } from "./types.js";
 
-export const handleChat = async (message: string, history: any[] = [], locale: string = "en", apiKey?: string, userContext?: any) => {
+export const handleChat = async (message: string, history: ChatHistoryItem[] = [], locale: string = "en", apiKey?: string, userContext?: UserContext) => {
 
     // Sequoia Pitch Auto-Demo Handler
     if (message === SYSTEM_CONSTANTS.COMMANDS.START_PITCH) {
@@ -59,7 +60,7 @@ export const handleChat = async (message: string, history: any[] = [], locale: s
         }
 
         // Fall back to local DB representatives
-        if (userContext?.representatives && userContext.representatives.length > 0) {
+        if (userContext?.representatives && userContext.representatives.length > 0 && userContext.constituency) {
             const rep = userContext.representatives[0];
             const html = `
                 <div class="space-y-4">
@@ -147,7 +148,7 @@ export const handleChat = async (message: string, history: any[] = [], locale: s
 
         const cleanHistory = history.map(h => ({
             role: h.role === 'model' ? 'model' : 'user',
-            parts: [{ text: h.parts?.[0]?.text || h.text || '' }]
+            parts: [{ text: (h as any).parts?.[0]?.text || h.text || '' }]
         }));
 
         const contents = [...cleanHistory, { role: 'user', parts: [{ text: message }] }];
@@ -172,17 +173,18 @@ export const handleChat = async (message: string, history: any[] = [], locale: s
         const cleanHtml = DOMPurify.sanitize(rawHtml, { USE_PROFILES: { html: true } });
         const agentHtml = `<div class="[&>p]:mb-3 [&>p:last-child]:mb-0 [&_a]:text-[#FF9933] [&_a]:font-bold [&_a]:underline hover:[&_a]:text-[#1A1A1A] [&_a]:transition-colors [&_strong]:font-bold">${cleanHtml}</div>`;
 
-        const simplifiedHistory = [...history, { role: 'user', text: message }, { role: 'model', text: responseText }].map((h: any) => ({
-            role: h.role === 'model' ? 'model' : 'user',
-            text: DOMPurify.sanitize(h.parts?.[0]?.text || h.text || '', { ALLOWED_TAGS: [] })
+        const simplifiedHistory: ChatHistoryItem[] = [...history, { role: 'user', text: message }, { role: 'model', text: responseText }].map((h) => ({
+            role: (h.role === 'model' ? 'model' : 'user') as 'user' | 'model',
+            text: DOMPurify.sanitize((h as any).parts?.[0]?.text || h.text || '', { ALLOWED_TAGS: [] })
         })).slice(-20);
 
         return { agentHtml, newHistory: simplifiedHistory };
 
-    } catch (e: any) {
+    } catch (e: unknown) {
         // Generic text for user, detailed for logs
+        const errorMessage = e instanceof Error ? e.message : String(e);
         const safeError = "Intelligence Core Offline. Please check your connection.";
-        const failedHistory = [...history, { role: 'user', text: message }].slice(-20);
-        return { agentHtml: generateGenericOfflineFallbackHtml(e.message || safeError), newHistory: failedHistory };
+        const failedHistory: ChatHistoryItem[] = [...history, { role: 'user' as const, text: message }].slice(-20);
+        return { agentHtml: generateGenericOfflineFallbackHtml(errorMessage || safeError), newHistory: failedHistory };
     }
 }

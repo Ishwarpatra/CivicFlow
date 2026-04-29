@@ -25,13 +25,15 @@ import { createApiRouter } from './src/routes/api.js';
 import { initFirebase } from './src/firebaseAdmin.js';
 import { fetchRepresentativesByAddress } from './src/civicApiService.js';
 
+import { ChatHistoryItem } from './src/types.js';
+
 // --- Session Interface ---
 declare module 'express-session' {
   interface SessionData {
     userId: number;
     email: string;
     role: string;
-    chatHistory: any[];
+    chatHistory: ChatHistoryItem[];
   }
 }
 
@@ -181,7 +183,7 @@ db.exec(`
 })();
 
 app.use(session({
-    store: new SQLiteStore({ dir: './', db: 'data.db', table: 'sessions', concurrentDB: 'true' as any } as any) as any,
+    store: new SQLiteStore({ dir: './', db: 'data.db', table: 'sessions', concurrentDB: 'true' as any }) as any,
     secret: sessionSecret,
     resave: false,
     saveUninitialized: false,

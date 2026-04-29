@@ -1,7 +1,19 @@
 import express from 'express';
 import DOMPurify from 'isomorphic-dompurify';
 import { z } from 'zod';
-import { generateUserMessageHtml, generateAgentMessageHtml, generateErrorHtml } from '../uiTemplates.js';
+import { 
+    generateUserMessageHtml, 
+    generateAgentMessageHtml, 
+    generateErrorHtml, 
+    generateVoteSuccessHtml, 
+    generateAlreadyVotedHtml, 
+    generateVoteErrorHtml, 
+    generateLoginToVoteHtml, 
+    generateCreditUpdateScript 
+} from '../uiTemplates.js';
+import { User, ChatSessionRow, Constituency, Candidate, UserContext, ChatHistoryItem } from '../types.js';
+import { Database } from 'better-sqlite3';
+import { Logger } from 'pino';
 import { handleChat } from '../chatHandler.js';
 import { SYSTEM_CONSTANTS } from '../constants.js';
 
@@ -11,7 +23,7 @@ const chatSchema = z.object({
     apiKey: z.string().max(255).optional(),
 });
 
-export function createApiRouter(db: any, logger: any, upload: any, chatLimiter: any, electionData?: any, firestoreDb?: any) {
+export function createApiRouter(db: Database, logger: Logger, upload: any, chatLimiter: any, electionData?: any, firestoreDb?: any) {
     const router = express.Router();
 
     // Use standard urlencoded body parsing for HTMX forms
@@ -36,7 +48,7 @@ export function createApiRouter(db: any, logger: any, upload: any, chatLimiter: 
             // Give Prompt Credits for civic actions
             if (sess.userId && (message.startsWith(SYSTEM_CONSTANTS.COMMANDS.FIND_BOOTH_LOCATION) || message === SYSTEM_CONSTANTS.COMMANDS.KNOW_REP)) {
                 db.prepare("UPDATE users SET prompt_credits = prompt_credits + 10 WHERE id = ?").run(sess.userId);
-                htmlResponse += `<script>document.dispatchEvent(new CustomEvent('update-credits', { detail: 10 }));</script>`;
+                htmlResponse += generateCreditUpdateScript(10);
             }
 
             // Escape and Echo user message to the UI
@@ -47,20 +59,20 @@ export function createApiRouter(db: any, logger: any, upload: any, chatLimiter: 
                 htmlResponse += generateUserMessageHtml(safeUserMessage);
             }
 
-            let dbHistory: any[] = [];
-            let userContext = null;
+            let dbHistory: ChatHistoryItem[] = [];
+            let userContext: UserContext;
 
             if (sess.userId) {
-                const chatSession = db.prepare("SELECT history FROM chat_sessions WHERE user_id = ? ORDER BY updated_at DESC LIMIT 1").get(sess.userId) as any;
+                const chatSession = db.prepare("SELECT history FROM chat_sessions WHERE user_id = ? ORDER BY updated_at DESC LIMIT 1").get(sess.userId) as ChatSessionRow | undefined;
                 if (chatSession && chatSession.history) {
                     try { dbHistory = JSON.parse(chatSession.history); } catch (e) { }
                 }
 
-                const user = db.prepare("SELECT * FROM users WHERE id = ?").get(sess.userId) as any;
+                const user = db.prepare("SELECT * FROM users WHERE id = ?").get(sess.userId) as User | undefined;
                 if (user && user.constituency) {
-                    const cons = db.prepare("SELECT * FROM constituencies WHERE name = ?").get(user.constituency) as any;
+                    const cons = db.prepare("SELECT * FROM constituencies WHERE name = ?").get(user.constituency) as Constituency | undefined;
                     if (cons) {
-                        const reps = db.prepare("SELECT * FROM candidates WHERE constituency_id = ? AND incumbent = 1").all(cons.id);
+                        const reps = db.prepare("SELECT * FROM candidates WHERE constituency_id = ? AND incumbent = 1").all(cons.id) as Candidate[];
                         userContext = { user: { epic_number: user.epic_number, state: user.state, constituency: user.constituency }, constituency: cons, representatives: reps, electionData };
                     } else {
                         userContext = { user: { epic_number: user.epic_number, state: user.state, constituency: user.constituency }, electionData };
@@ -70,7 +82,7 @@ export function createApiRouter(db: any, logger: any, upload: any, chatLimiter: 
                 }
             } else {
                 dbHistory = sess.chatHistory || [];
-                userContext = { electionData };
+                userContext = { user: null, electionData };
             }
 
             // Sliding window: keep only last 10 turns
@@ -78,16 +90,16 @@ export function createApiRouter(db: any, logger: any, upload: any, chatLimiter: 
                 dbHistory = dbHistory.slice(-10);
             }
 
-            const formattedHistory = dbHistory.map((item: any) => ({
+            const formattedHistory: ChatHistoryItem[] = dbHistory.map((item) => ({
                 role: item.role,
-                parts: [{ text: item.parts && Array.isArray(item.parts) ? item.parts[0].text : item.parts }],
+                text: (item as any).parts && Array.isArray((item as any).parts) ? (item as any).parts[0].text : (item as any).parts || item.text,
             }));
 
             const { agentHtml, newHistory } = await handleChat(message, formattedHistory, locale as string, apiKey, userContext);
 
-            const serializableHistory = newHistory.map((item: any) => ({
+            const serializableHistory: ChatHistoryItem[] = newHistory.map((item: any) => ({
                 role: item.role,
-                parts: item.parts?.[0]?.text || "",
+                text: item.parts?.[0]?.text || item.text || "",
             }));
 
             let safeNewHistory = serializableHistory;
@@ -117,7 +129,7 @@ export function createApiRouter(db: any, logger: any, upload: any, chatLimiter: 
     router.post('/vote', async (req: express.Request, res: express.Response) => {
         const sess = req.session;
         if (!sess || !sess.userId) {
-            return res.status(401).send('<button disabled class="m3-button-disabled">Log in to vote</button>');
+            return res.status(401).send(generateLoginToVoteHtml());
         }
 
         try {
@@ -134,18 +146,18 @@ export function createApiRouter(db: any, logger: any, upload: any, chatLimiter: 
                         electionId: 'general_2026',
                         timestamp: new Date().toISOString(),
                     }, { merge: true });
-                } catch (fbErr: any) {
+                } catch (fbErr: unknown) {
                     logger.warn({ err: fbErr }, 'Firestore vote write failed (non-fatal)');
                 }
             }
 
-            res.send(`<button disabled class="m3-button-voted">VOTED</button>`);
+            res.send(generateVoteSuccessHtml());
         } catch (e: any) {
             if (e.message.includes('UNIQUE constraint failed')) {
-                res.send('<button disabled class="m3-button-voted">ALREADY VOTED</button>');
+                res.send(generateAlreadyVotedHtml());
             } else {
                 logger.error({ err: e }, "Vote Error");
-                res.status(500).send('<button disabled class="m3-button-error">Error recording vote</button>');
+                res.status(500).send(generateVoteErrorHtml());
             }
         }
     });
