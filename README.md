@@ -37,6 +37,17 @@ Express.js Server (TypeScript)
 
 ---
 
+## Approach & Logic
+
+CivicFlow is built on the principle of **"Single Point of Truth"** unification. 
+
+1.  **Guided Navigation**: Instead of presenting a menu of 50 links, the system uses a **Guided Chat Flow**. It proactively asks for the user's State and Constituency only when needed for specific actions (like finding a representative), storing these in the session for future context.
+2.  **Hybrid Persistence**: To solve the ephemeral nature of Cloud Run, we use a **Dual-Write Strategy**. High-value data (Votes) are written to **Firebase Firestore** for long-term persistence, while transient data (Chat History, Credits) are kept in **SQLite** for high-speed local access.
+3.  **Graceful Degeneracy**: If the Gemini AI is unavailable (503), the system automatically detects this and injects a **"Static Intelligence"** layer that provides official ECI links based on the user's current context.
+4.  **Security-First HTMX**: We use HTMX for a "Hypermedia" approach, which allows us to keep all business logic and state (including Auth and Session) on the server, significantly reducing the attack surface compared to a thick-client SPA.
+
+---
+
 ## Google Services Used
 
 | Service | Purpose | Status |

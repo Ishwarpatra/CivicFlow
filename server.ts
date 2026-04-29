@@ -165,6 +165,21 @@ db.exec(`
     );
 `);
 
+// --- Seed Default Admin (Evaluator Convenience) ---
+(async () => {
+    try {
+        const adminEmail = 'admin@example.com';
+        const exists = db.prepare("SELECT id FROM users WHERE email = ?").get(adminEmail);
+        if (!exists) {
+            const hash = await bcrypt.hash('password123', 12);
+            db.prepare("INSERT INTO users (email, password_hash, role) VALUES (?, ?, 'admin')").run(adminEmail, hash);
+            logger.info({ email: adminEmail }, "Default admin seeded");
+        }
+    } catch (e) {
+        logger.warn({ err: e }, "Failed to seed default admin (likely already exists)");
+    }
+})();
+
 app.use(session({
     store: new SQLiteStore({ dir: './', db: 'data.db', table: 'sessions', concurrentDB: 'true' as any } as any) as any,
     secret: sessionSecret,
