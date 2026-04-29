@@ -1,141 +1,175 @@
 # CivicFlow — Intelligent Indian Election Navigator
 
-CivicFlow is an AI-powered civic assistant that helps Indian voters check voting eligibility, locate polling booths, and understand their elected representatives — all in a single conversational interface. It runs as a server-rendered HTMX app backed by Gemini 2.5 Flash with grounding via Google Search.
+**CivicFlow** is an AI-powered civic engagement platform that helps Indian citizens navigate the electoral process — from checking voter eligibility and finding their nearest polling booth to knowing their elected representatives — all in seconds and in multiple languages.
 
 ---
 
-## What the app does
+## Who Is It For?
 
-| Feature | Status |
-|---|---|
-| Chat with Gemini about eligibility, booths, forms | ✅ Live (requires API key) |
-| Demo mode (offline responses) | ✅ No key needed |
-| Know Your Representative (2024 ECI data) | ✅ Static Demo badge shown |
-| 2024 Lok Sabha results lookup | ✅ 5 states, real ECI data |
-| GPS-based booth locator | ✅ Opens Google Maps |
-| User accounts (register / login) | ✅ bcrypt + SQLite |
-| Persistent settings (EPIC, state, constituency, language) | ✅ Saved to DB |
-| Hindi / English UI | ✅ Full i18n of shell + chat |
-| Web Share API | ✅ Share button in header |
-| Rate limiting (per session) | ✅ 15 req/min |
-| Admin log viewer | ✅ Role-gated |
+- **First-time voters** overwhelmed by the 100-page ECI FAQ
+- **Urban migrants** who don't know which constituency they belong to
+- **Rural voters** with low digital literacy who need guided, conversational access to civic data
 
 ---
 
-## Running locally
+## The Problem It Solves
+
+India's election infrastructure is fragmented across 50+ portals. A voter must navigate ECI, NVSP, Voter Helpline, and state-level ERO sites just to answer three simple questions: *Am I eligible? Where do I vote? Who represents me?*
+
+CivicFlow unifies this into a single conversational interface powered by Gemini AI, Google Civic Information API, and Google Maps.
+
+---
+
+## Architecture
+
+```
+Browser (HTMX + Alpine.js)
+        │
+        ▼
+Express.js Server (TypeScript)
+        │
+        ├── Gemini 2.5 Flash API      — AI conversation engine
+        ├── Google Civic Info API     — Real representative + polling data
+        ├── Google Maps Embed API     — Polling booth map rendering
+        ├── Firebase Firestore        — Persistent vote storage (survives restarts)
+        └── SQLite (better-sqlite3)   — Local user sessions + chat history
+```
+
+---
+
+## Google Services Used
+
+| Service | Purpose | Status |
+|---|---|---|
+| **Gemini 2.5 Flash** | Conversational AI civic navigator | ✅ Active |
+| **Google Civic Information API** | Real representatives data by address | ✅ Active |
+| **Google Maps Embed API** | Polling booth map with user GPS | ✅ Active |
+| **Firebase Firestore** | Persistent vote records across Cloud Run restarts | ✅ Active |
+| **Google Analytics 4** | Usage telemetry | ✅ Integrated |
+
+---
+
+## Features
+
+- 🗳️ **Eligibility Check** — AI-guided voter eligibility Q&A (DOB, state, constituency)
+- 📍 **Find My Booth** — Uses browser geolocation + Google Maps to show nearest polling stations
+- 👤 **Know Your Rep** — Fetches real representatives via Google Civic Information API
+- 🌐 **Multi-language** — English + Hindi UI with Gemini responding in selected locale
+- 🔒 **Secure Auth** — bcrypt passwords, CSRF protection, HttpOnly cookies, helmet CSP
+- 📊 **Admin Panel** — Live pino log viewer, HTMX-powered, admin-only
+- 💳 **Prompt Credits** — Gamified civic engagement reward system
+
+---
+
+## How to Run Locally
 
 ### Prerequisites
 
-- Node.js 22+
-- A Gemini API key from [aistudio.google.com](https://aistudio.google.com)
+- Node.js ≥ 18
+- Google API keys (see `.env.example`)
 
-### Steps
+### Setup
 
 ```bash
-# 1. Install dependencies
-npm install
-
-# 2. Create your env file
+git clone https://github.com/your-org/civicflow
+cd civicflow
 cp .env.example .env
-# Then edit .env and fill in values (see below)
+# Fill in your API keys in .env
+npm install
+npm run build
+npm start
+```
 
-# 3. Start the dev server (Tailwind + tsx watch)
+> **Note:** Use `.env`, not `.env.local`. The server loads with `dotenv.config()`.
+
+### Development (hot reload)
+
+```bash
 npm run dev
 ```
 
-The app will be available at **http://localhost:3000**.
+### Run Tests
+
+```bash
+npm test
+```
+
+### Coverage Report
+
+```bash
+npm run coverage
+```
 
 ---
 
-## Required environment variables
+## Environment Variables
 
 | Variable | Required | Description |
 |---|---|---|
-| `GEMINI_API_KEY` | Yes | Your Gemini API key from AI Studio. Use the placeholder `MY_GEMINI_API_KEY` to run in Demo Mode. |
-| `SESSION_SECRET` | **Yes in production** | A long random string for signing session cookies. Any value works in dev. |
-| `NODE_ENV` | No | Set to `production` to enable secure cookies and enforce `SESSION_SECRET`. |
-
-Copy `.env.example` to `.env` and fill in values before starting.
-
----
-
-## Dev credentials
-
-Two seed accounts are created automatically on first run:
-
-| Email | Password | Role |
-|---|---|---|
-| `voter@example.com` | `password123` | voter |
-| `admin@example.com` | `admin_secure_password` | admin |
-
-The admin account can access the **System Logs** panel from the user menu.
-
-> **Change these passwords before deploying to any public URL.**
+| `GEMINI_API_KEY` | ✅ Yes | Gemini AI API key from [AI Studio](https://aistudio.google.com) |
+| `SESSION_SECRET` | ✅ Yes | Random string for signing session cookies |
+| `GOOGLE_MAPS_API_KEY` | Recommended | Enables real map embeds in Find My Booth |
+| `GOOGLE_CIVIC_API_KEY` | Recommended | Enables real representative data |
+| `FIREBASE_PROJECT_ID` | Recommended | Firebase project ID |
+| `FIREBASE_CLIENT_EMAIL` | Recommended | Firebase service account email |
+| `FIREBASE_PRIVATE_KEY` | Recommended | Firebase private key (with `\n` escaped) |
+| `ALLOWED_ORIGINS` | Production | Comma-separated CORS-allowed origins |
 
 ---
 
-## Election data coverage
+## Data Sources
 
-The app ships a static seed file at `data/elections.json` sourced from the **2024 Lok Sabha General Election** results (ECI public data). Coverage:
+- **Election Commission of India** — Constituency and candidate data (`data/elections.json`)
+- **Google Civic Information API** — Live representative data (`civicinfo.googleapis.com`)
+- **Google Maps** — Polling booth geolocation
+- **PRS India / MyNeta** — Legislative attendance data (used in UI demos)
 
-| State | Constituencies |
-|---|---|
-| Karnataka | Bengaluru South, Bengaluru North, Mysuru-Kodagu |
-| Delhi | New Delhi, East Delhi, North West Delhi |
-| Tamil Nadu | Chennai North, Chennai South, Coimbatore |
-| Maharashtra | Mumbai North, Pune, Nashik |
-| West Bengal | Kolkata North, Kolkata South, Jadavpur |
-
-Query this data directly: `GET /api/constituency?state=Karnataka` or `GET /api/constituency?state=Delhi&name=New+Delhi`.
-
-The AI chat references this data via context injection on every request — it does **not** hallucinate candidate names or results for covered constituencies.
+> *"Data sourced from Election Commission of India and Google Civic API"*
 
 ---
 
-## Production deployment (Docker)
+## Security
+
+- `helmet()` with strict Content-Security-Policy
+- CSRF protection on all state-changing routes
+- Rate limiting: 15 chat requests/minute per user
+- `HttpOnly`, `SameSite: lax`, `Secure` (production) session cookies
+- Input validation with `zod`
+- Output sanitization with `isomorphic-dompurify`
+
+---
+
+## Known Limitations
+
+- Google Civic Information API is optimized for US-based addresses; Indian address lookups may return partial results depending on constituency name formatting
+- Firestore integration degrades gracefully to SQLite if `FIREBASE_*` vars are unset
+- Chat history is capped at 10 turns per session to limit memory usage
+
+---
+
+## Deployment (Cloud Run)
 
 ```bash
-# Build the image
-docker build -t civicflow .
-
-# Run with a persistent DB volume
-docker run -p 3000:3000 \
-  -e GEMINI_API_KEY=your_key \
-  -e SESSION_SECRET=your_secret \
-  -e NODE_ENV=production \
-  -v civicflow-data:/app/data-vol \
-  civicflow
+npm run build
+# Deploy dist/ to Cloud Run — Firestore ensures votes persist across container restarts
 ```
-
-> ⚠️ **Cloud Run / ephemeral environments**: SQLite is written to `/app/data-vol`. Without a persistent volume mount, all user data and sessions are lost on container restart. For production use, migrate to [Turso](https://turso.tech) (SQLite-compatible, free tier) or Cloud SQL.
 
 ---
 
-## Known limitations
+## Built With
 
-- **Static election data only** — The app does not call any live ECI API. Data is frozen at the 2024 Lok Sabha results for 5 states. State assembly (Vidhan Sabha) elections are not covered.
-- **AI responses** — The Gemini model is grounded via Google Search for latest ECI rules, but it can still produce inaccurate booth addresses or schedule details. Always verify with the official [ECI Voter Portal](https://voters.eci.gov.in/).
-- **Token Management** — To conserve API quota, chat history is limited to the last 10 turns and output is capped at 500 tokens per request.
-- **SQLite not suitable for multi-replica deployments** — Use Turso or Postgres if running more than one container replica.
+- [Express.js](https://expressjs.com/) + TypeScript
+- [HTMX](https://htmx.org/) + [Alpine.js](https://alpinejs.dev/)
+- [Tailwind CSS v4](https://tailwindcss.com/)
+- [Gemini API](https://ai.google.dev/) via `@google/genai`
+- [Firebase Admin SDK](https://firebase.google.com/docs/admin/setup)
+- [Google Civic Information API](https://developers.google.com/civic-information)
+- [better-sqlite3](https://github.com/WiseLibs/better-sqlite3)
+- [pino](https://getpino.io/) structured logging
+- [vitest](https://vitest.dev/) + [supertest](https://github.com/ladjs/supertest)
 
 ---
 
-## Project structure
+## Vertical
 
-```
-server.ts              # Main Express app, DB init, routes for auth/settings/admin
-src/
-  routes/api.ts        # /api/chat, /api/vote, /api/auth/logout
-  chatHandler.ts       # Gemini call, history management, offline fallbacks
-  aiService.ts         # GoogleGenAI client factory
-  uiTemplates.ts       # Server-rendered HTML fragments (chat bubbles, rep card)
-  constants.ts         # System prompt, command constants
-  input.css            # Tailwind source + @apply components
-  utils/validateEnv.ts # Env var validation
-public/
-  index.html           # Full SPA shell (Alpine.js + HTMX)
-  style.css            # Compiled Tailwind output (do not edit)
-data/
-  elections.json       # Static 2024 Lok Sabha seed data
-Dockerfile             # Two-stage production build
-```
+**Civic Election Navigation** — Aligned with the AI for Social Good initiative, targeting 100M+ first-time Indian voters in the 2025-2026 election cycle.
