@@ -14,7 +14,6 @@ import bcrypt from 'bcrypt';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import DOMPurify from 'isomorphic-dompurify';
-import csurf from 'csurf';
 import cors from 'cors';
 import compression from 'compression';
 
@@ -46,7 +45,7 @@ if (isProd && !process.env.SESSION_SECRET) {
 const sessionSecret = process.env.SESSION_SECRET || 'dev-secret-unsafe';
 const requireJson = createRequire(import.meta.url);
 const app = express();
-const PORT = Number(process.env.PORT) || 3000;
+const PORT = parseInt(process.env.PORT || '8080', 10);
 const upload = multer();
 
 // --- Logger Setup ---
@@ -181,15 +180,6 @@ app.use(express.json({ limit: '50kb' }));
 app.use(express.urlencoded({ limit: '50kb', extended: true }));
 app.use(cookieParser());
 
-// --- CSRF ---
-const csrfProtection = csurf({ 
-    cookie: { 
-        httpOnly: true, 
-        secure: isProd, 
-        sameSite: 'lax' 
-    } 
-});
-
 // --- Election Data Loading ---
 let electionData: any = { states: [] };
 try {
@@ -212,7 +202,7 @@ for (const state of electionData.states || []) {
 }
 
 // --- API Router ---
-const apiRouter = createApiRouter(db, logger, upload, chatLimiter, csrfProtection, electionData, firestoreDb);
+const apiRouter = createApiRouter(db, logger, upload, chatLimiter, electionData, firestoreDb);
 app.use('/api', apiRouter);
 
 // --- Google Civic Information API Route ---
@@ -238,10 +228,6 @@ app.get('/api/health', (req: express.Request, res: express.Response) => {
   }
 });
 
-app.get('/api/csrf', csrfProtection, (req: express.Request, res: express.Response) => {
-  res.json({ csrfToken: req.csrfToken() });
-});
-
 app.get('/api/auth/me', (req: express.Request, res: express.Response) => {
     if (!req.session.userId) return res.json({ success: false });
     const user = db.prepare("SELECT email, role, prompt_credits FROM users WHERE id = ?").get(req.session.userId) as any;
@@ -252,7 +238,7 @@ app.get('/api/auth/me', (req: express.Request, res: express.Response) => {
     }
 });
 
-app.post('/api/register', csrfProtection, async (req: express.Request, res: express.Response) => {
+app.post('/api/register', async (req: express.Request, res: express.Response) => {
     const { email, password } = req.body;
     if (!email || !email.includes('@') || email.length > 255) {
         return res.status(400).json({ success: false, message: 'Invalid email format' });
@@ -307,7 +293,7 @@ app.get('/api/constituency', (req: express.Request, res: express.Response) => {
     });
 });
 
-app.post('/api/login', csrfProtection, async (req: express.Request, res: express.Response) => {
+app.post('/api/login', async (req: express.Request, res: express.Response) => {
     const { email, password } = req.body;
     if (!email || !password) return res.status(400).json({ success: false, message: 'Missing credentials' });
 
@@ -327,20 +313,20 @@ app.post('/api/login', csrfProtection, async (req: express.Request, res: express
     }
 });
 
-app.post('/api/logout', csrfProtection, (req: express.Request, res: express.Response) => {
+app.post('/api/logout', (req: express.Request, res: express.Response) => {
     req.session.destroy(() => {
         res.setHeader('HX-Trigger', JSON.stringify({ 'auth-changed': null }));
         res.status(204).send();
     });
 });
 
-app.get('/api/settings', csrfProtection, (req: express.Request, res: express.Response) => {
+app.get('/api/settings', (req: express.Request, res: express.Response) => {
     if (!req.session.userId) return res.status(401).json({ success: false, message: 'Unauthorized' });
     const user = db.prepare("SELECT epic_number, state, constituency, language_preference FROM users WHERE id = ?").get(req.session.userId) as any;
     res.json({ success: true, settings: user });
 });
 
-app.post('/api/settings', csrfProtection, (req: express.Request, res: express.Response) => {
+app.post('/api/settings', (req: express.Request, res: express.Response) => {
     if (!req.session.userId) return res.status(401).json({ success: false, message: 'Unauthorized' });
     
     const { epic_number, state, constituency, language_preference } = req.body;
@@ -357,7 +343,7 @@ app.post('/api/settings', csrfProtection, (req: express.Request, res: express.Re
     }
 });
 
-app.get('/api/admin/logs', csrfProtection, async (req: express.Request, res: express.Response) => {
+app.get('/api/admin/logs', async (req: express.Request, res: express.Response) => {
     if (req.session.role !== 'admin') return res.status(403).send('<div class="p-4 bg-red-600 text-white">Access Denied</div>');
     
     try {
@@ -385,15 +371,12 @@ app.get(/^(?!\/api).*$/, (req: express.Request, res: express.Response) => {
 
 // --- Error Handling ---
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
-    if (err.code === 'EBADCSRFTOKEN') {
-        return res.status(403).json({ success: false, message: 'Invalid CSRF token.' });
-    }
     logger.error({ err }, "Global Error Handler");
     res.status(500).json({ success: false, message: 'Internal server error' });
 });
 
 // --- Start Server ---
-const server = app.listen(PORT, "0.0.0.0", () => {
+const server = app.listen(PORT, '0.0.0.0', () => {
   logger.info(`CivicFlow v0.1.0-alpha running on port ${PORT}`);
 });
 

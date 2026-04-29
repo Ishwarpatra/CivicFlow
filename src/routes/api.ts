@@ -11,11 +11,11 @@ const chatSchema = z.object({
     apiKey: z.string().max(255).optional(),
 });
 
-export function createApiRouter(db: any, logger: any, upload: any, chatLimiter: any, csrfProtection: any, electionData?: any, firestoreDb?: any) {
+export function createApiRouter(db: any, logger: any, upload: any, chatLimiter: any, electionData?: any, firestoreDb?: any) {
     const router = express.Router();
 
     // Use standard urlencoded body parsing for HTMX forms
-    router.post('/chat', chatLimiter, csrfProtection, async (req: express.Request, res: express.Response) => {
+    router.post('/chat', chatLimiter, async (req: express.Request, res: express.Response) => {
         let htmlResponse = "";
         try {
             const validationResult = chatSchema.safeParse(req.body);
@@ -114,7 +114,7 @@ export function createApiRouter(db: any, logger: any, upload: any, chatLimiter: 
         }
     });
 
-    router.post('/vote', csrfProtection, async (req: express.Request, res: express.Response) => {
+    router.post('/vote', async (req: express.Request, res: express.Response) => {
         const sess = req.session;
         if (!sess || !sess.userId) {
             return res.status(401).send('<button disabled class="m3-button-disabled">Log in to vote</button>');

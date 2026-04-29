@@ -5,5 +5,5 @@ RUN npm ci
 COPY . .
 RUN npm run build
 ENV NODE_ENV=production
-EXPOSE 3000
-CMD ["node_modules/.bin/tsx", "server.ts"]
+EXPOSE 8080
+CMD ["node", "dist/server.js"]
