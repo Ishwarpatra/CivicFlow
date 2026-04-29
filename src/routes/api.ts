@@ -11,7 +11,7 @@ const chatSchema = z.object({
     apiKey: z.string().max(255).optional(),
 });
 
-export function createApiRouter(db: any, logger: any, upload: any, chatLimiter: any, csrfProtection: any, electionData?: any) {
+export function createApiRouter(db: any, logger: any, upload: any, chatLimiter: any, csrfProtection: any, electionData?: any, firestoreDb?: any) {
     const router = express.Router();
 
     // Use standard urlencoded body parsing for HTMX forms
@@ -24,7 +24,7 @@ export function createApiRouter(db: any, logger: any, upload: any, chatLimiter: 
             }
             const { message, lang, apiKey } = validationResult.data;
             const locale = lang || req.query.lang || 'en';
-            
+
             const sess = req.session;
             if (!sess) return res.status(500).send(generateErrorHtml("Session initialization failed."));
 
@@ -32,30 +32,30 @@ export function createApiRouter(db: any, logger: any, upload: any, chatLimiter: 
                 userId: sess.userId || 'anonymous',
                 messageLength: message.length,
             }, "Incoming chat request");
-            
+
             // Give Prompt Credits for civic actions
             if (sess.userId && (message.startsWith(SYSTEM_CONSTANTS.COMMANDS.FIND_BOOTH_LOCATION) || message === SYSTEM_CONSTANTS.COMMANDS.KNOW_REP)) {
                 db.prepare("UPDATE users SET prompt_credits = prompt_credits + 10 WHERE id = ?").run(sess.userId);
                 htmlResponse += `<script>document.dispatchEvent(new CustomEvent('update-credits', { detail: 10 }));</script>`;
             }
-            
+
             // Escape and Echo user message to the UI
-            if(!message.startsWith(SYSTEM_CONSTANTS.COMMANDS.FIND_BOOTH_LOCATION) && 
-               message !== SYSTEM_CONSTANTS.COMMANDS.START_PITCH && 
-               message !== SYSTEM_CONSTANTS.COMMANDS.KNOW_REP) {
-                 const safeUserMessage = DOMPurify.sanitize(message, { ALLOWED_TAGS: [] });
-                 htmlResponse += generateUserMessageHtml(safeUserMessage);
+            if (!message.startsWith(SYSTEM_CONSTANTS.COMMANDS.FIND_BOOTH_LOCATION) &&
+                message !== SYSTEM_CONSTANTS.COMMANDS.START_PITCH &&
+                message !== SYSTEM_CONSTANTS.COMMANDS.KNOW_REP) {
+                const safeUserMessage = DOMPurify.sanitize(message, { ALLOWED_TAGS: [] });
+                htmlResponse += generateUserMessageHtml(safeUserMessage);
             }
-    
+
             let dbHistory: any[] = [];
             let userContext = null;
-    
+
             if (sess.userId) {
                 const chatSession = db.prepare("SELECT history FROM chat_sessions WHERE user_id = ? ORDER BY updated_at DESC LIMIT 1").get(sess.userId) as any;
                 if (chatSession && chatSession.history) {
-                    try { dbHistory = JSON.parse(chatSession.history); } catch (e) {}
+                    try { dbHistory = JSON.parse(chatSession.history); } catch (e) { }
                 }
-    
+
                 const user = db.prepare("SELECT * FROM users WHERE id = ?").get(sess.userId) as any;
                 if (user && user.constituency) {
                     const cons = db.prepare("SELECT * FROM constituencies WHERE name = ?").get(user.constituency) as any;
@@ -72,29 +72,29 @@ export function createApiRouter(db: any, logger: any, upload: any, chatLimiter: 
                 dbHistory = sess.chatHistory || [];
                 userContext = { electionData };
             }
-    
+
             // Sliding window: keep only last 10 turns
             if (dbHistory && dbHistory.length > 10) {
                 dbHistory = dbHistory.slice(-10);
             }
-    
+
             const formattedHistory = dbHistory.map((item: any) => ({
                 role: item.role,
                 parts: [{ text: item.parts && Array.isArray(item.parts) ? item.parts[0].text : item.parts }],
             }));
-            
+
             const { agentHtml, newHistory } = await handleChat(message, formattedHistory, locale as string, apiKey, userContext);
-            
+
             const serializableHistory = newHistory.map((item: any) => ({
                 role: item.role,
                 parts: item.parts?.[0]?.text || "",
             }));
-            
+
             let safeNewHistory = serializableHistory;
             if (safeNewHistory && safeNewHistory.length > 10) {
-                 safeNewHistory = safeNewHistory.slice(-10);
+                safeNewHistory = safeNewHistory.slice(-10);
             }
-    
+
             if (sess.userId) {
                 const exists = db.prepare("SELECT id FROM chat_sessions WHERE user_id = ?").get(sess.userId);
                 if (exists) {
@@ -105,26 +105,42 @@ export function createApiRouter(db: any, logger: any, upload: any, chatLimiter: 
             } else {
                 sess.chatHistory = safeNewHistory;
             }
-    
-             htmlResponse += generateAgentMessageHtml(agentHtml);
-             res.send(htmlResponse);
-        } catch(e: any) {
+
+            htmlResponse += generateAgentMessageHtml(agentHtml);
+            res.send(htmlResponse);
+        } catch (e: any) {
             logger.error({ err: e }, "Chat Error");
             res.status(500).send(htmlResponse + generateErrorHtml("AI processing failed. Please try again."));
         }
     });
 
-    router.post('/vote', csrfProtection, (req: express.Request, res: express.Response) => {
+    router.post('/vote', csrfProtection, async (req: express.Request, res: express.Response) => {
         const sess = req.session;
         if (!sess || !sess.userId) {
             return res.status(401).send('<button disabled class="m3-button-disabled">Log in to vote</button>');
         }
-    
+
         try {
-            // Correctly uses session userId - NO hardcoded emails here
+            // Write to SQLite (local persistence)
             db.prepare("INSERT INTO votes (user_id) VALUES (?)").run(sess.userId);
+
+            // Dual-write to Firestore (cloud persistence — survives Cloud Run restarts)
+            if (firestoreDb) {
+                try {
+                    const voteRef = firestoreDb.collection('votes').doc(`${sess.userId}_general_2026`);
+                    await voteRef.set({
+                        userId: sess.userId,
+                        email: sess.email || null,
+                        electionId: 'general_2026',
+                        timestamp: new Date().toISOString(),
+                    }, { merge: true });
+                } catch (fbErr: any) {
+                    logger.warn({ err: fbErr }, 'Firestore vote write failed (non-fatal)');
+                }
+            }
+
             res.send(`<button disabled class="m3-button-voted">VOTED</button>`);
-        } catch(e: any) {
+        } catch (e: any) {
             if (e.message.includes('UNIQUE constraint failed')) {
                 res.send('<button disabled class="m3-button-voted">ALREADY VOTED</button>');
             } else {
