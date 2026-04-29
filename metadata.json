@@ -4,5 +4,5 @@
   "requestFramePermissions": [
     "geolocation"
   ],
-  "majorCapabilities": []
+  "majorCapabilities": ["AI-Powered Civic Assistant", "Real-time Election Data Integration", "Geo-targeted Polling Booth Locator", "Multi-platform Cloud Persistence"]
 }
