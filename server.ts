@@ -199,8 +199,8 @@ try {
     } else {
         logger.warn(`elections.json not found at ${electionPath} — /api/constituency will return empty results.`);
     }
-} catch (e) {
-    logger.warn({ err: e }, 'Could not load elections.json — /api/constituency will return empty results.');
+} catch (e: any) {
+    logger.warn(`Could not load elections.json: ${e.message} — /api/constituency will return empty results.`);
 }
 
 const constituencyIndex = new Map<string, any>();
