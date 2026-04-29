@@ -1,40 +1,20 @@
-# ── Stage 1: Build ─────────────────────────────────────────────────────────────
-FROM node:22-alpine AS builder
+FROM node:20-slim AS builder
 WORKDIR /app
-
-# Install dependencies (including devDeps for tsc + tailwind)
 COPY package*.json ./
 RUN npm ci
-
-# Copy source and compile
-COPY tsconfig.json ./
-COPY src/ ./src/
-COPY server.ts ./
-COPY data/ ./data/
-COPY public/ ./public/
-
-# Build: Tailwind CSS → copy htmx/alpine → TypeScript compile
+COPY . .
 RUN npm run build
 
-# ── Stage 2: Production image ───────────────────────────────────────────────────
-FROM node:22-alpine AS runner
+FROM node:20-slim
 WORKDIR /app
-
-ENV NODE_ENV=production
-
-# Only production dependencies
-COPY package*.json ./
-RUN npm ci --omit=dev && npm cache clean --force
-
-# Copy compiled output and static assets
-COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/public ./public
+COPY --from=builder /app/src ./src
+COPY --from=builder /app/server.ts ./server.ts
+COPY --from=builder /app/tsconfig.json ./tsconfig.json
+COPY --from=builder /app/package.json ./package.json
 COPY --from=builder /app/data ./data
 
-# SQLite DB lives on a mounted volume in Cloud Run / Docker Compose
-VOLUME ["/app/data-vol"]
-ENV DB_PATH=/app/data-vol/data.db
-
-
-# Graceful shutdown via SIGTERM is handled in server.ts
-CMD ["node", "dist/server.js"]
+ENV NODE_ENV=production
+EXPOSE 3000
+CMD ["node_modules/.bin/tsx", "server.ts"]
