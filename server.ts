@@ -16,11 +16,14 @@ import rateLimit from 'express-rate-limit';
 import DOMPurify from 'isomorphic-dompurify';
 import csurf from 'csurf';
 import cors from 'cors';
+import compression from 'compression';
 
 import { handleChat } from './src/chatHandler.js';
 import { generateErrorHtml, generateAdminLogsHtml } from './src/uiTemplates.js';
 import { validateEnv } from './src/utils/validateEnv.js';
 import { createApiRouter } from './src/routes/api.js';
+import { initFirebase } from './src/firebaseAdmin.js';
+import { fetchRepresentativesByAddress } from './src/civicApiService.js';
 
 // --- Session Interface ---
 declare module 'express-session' {
@@ -43,7 +46,7 @@ if (isProd && !process.env.SESSION_SECRET) {
 const sessionSecret = process.env.SESSION_SECRET || 'dev-secret-unsafe';
 const requireJson = createRequire(import.meta.url);
 const app = express();
-const PORT = 3000;
+const PORT = Number(process.env.PORT) || 3000;
 const upload = multer();
 
 // --- Logger Setup ---
@@ -63,11 +66,12 @@ app.use(helmet({
     contentSecurityPolicy: {
         directives: {
             "default-src": ["'self'"],
-            "script-src": ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https://unpkg.com"],
+            "script-src": ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https://unpkg.com", "https://www.googletagmanager.com", "https://maps.googleapis.com"],
             "style-src": ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
             "font-src": ["'self'", "https://fonts.gstatic.com"],
-            "img-src": ["'self'", "data:", "https://images.unsplash.com"],
-            "connect-src": ["'self'"],
+            "img-src": ["'self'", "data:", "https://images.unsplash.com", "https://maps.gstatic.com", "https://maps.googleapis.com"],
+            "connect-src": ["'self'", "https://civicinfo.googleapis.com", "https://maps.googleapis.com"],
+            "frame-src": ["'self'", "https://www.google.com"],
             "frame-ancestors": ["'none'"]
         },
     },
@@ -81,8 +85,16 @@ app.use(cors({
 
 app.set('trust proxy', 1);
 
+// --- Firebase Firestore (Google Service) ---
+const firestoreDb = initFirebase();
+
 // --- Database & Session Store ---
-const db = new Database('data.db');
+const dbPath = process.env.DB_PATH || 'data.db';
+const dbDir = path.dirname(dbPath);
+if (dbPath !== 'data.db' && !fs.existsSync(dbDir)) {
+    fs.mkdirSync(dbDir, { recursive: true });
+}
+const db = new Database(dbPath);
 const SQLiteStore = connectSqlite3(session);
 
 db.exec(`
@@ -161,7 +173,10 @@ const chatLimiter = rateLimit({
 });
 
 // --- Body Parsing ---
-app.use(express.static(path.join(process.cwd(), 'public')));
+// --- Efficiency & Static Files ---
+app.use(compression());
+app.use(express.static(path.join(process.cwd(), 'public'), { maxAge: '1d' }));
+
 app.use(express.json({ limit: '50kb' }));
 app.use(express.urlencoded({ limit: '50kb', extended: true }));
 app.use(cookieParser());
@@ -192,8 +207,21 @@ for (const state of electionData.states || []) {
 }
 
 // --- API Router ---
-const apiRouter = createApiRouter(db, logger, upload, chatLimiter, csrfProtection, electionData);
+const apiRouter = createApiRouter(db, logger, upload, chatLimiter, csrfProtection, electionData, firestoreDb);
 app.use('/api', apiRouter);
+
+// --- Google Civic Information API Route ---
+app.get('/api/civic/representatives', async (req: express.Request, res: express.Response) => {
+    const address = req.query.address ? String(req.query.address) : '';
+    if (!address) return res.status(400).json({ success: false, message: 'address query param required' });
+    try {
+        const result = await fetchRepresentativesByAddress(address);
+        res.json({ success: true, ...result });
+    } catch (e: any) {
+        logger.error({ err: e }, 'Civic API route error');
+        res.status(500).json({ success: false, message: 'Civic API request failed' });
+    }
+});
 
 // --- Core API Handlers ---
 app.get('/api/health', (req: express.Request, res: express.Response) => {
