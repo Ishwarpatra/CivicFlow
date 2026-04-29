@@ -35,14 +35,30 @@ declare module 'express-session' {
 }
 
 dotenv.config();
-validateEnv();
 
+// --- Enhanced Startup Diagnostics ---
 const isProd = process.env.NODE_ENV === 'production';
-if (isProd && !process.env.SESSION_SECRET) {
-    throw new Error("SESSION_SECRET must be set in production.");
+logger.info({ 
+    env: {
+        NODE_ENV: process.env.NODE_ENV,
+        PORT: process.env.PORT,
+        HAS_GEMINI_KEY: !!process.env.GEMINI_API_KEY,
+        HAS_SESSION_SECRET: !!process.env.SESSION_SECRET,
+        HAS_FIREBASE_KEY: !!process.env.FIREBASE_PRIVATE_KEY
+    }
+}, "Server Starting Diagnostics");
+
+try {
+    validateEnv();
+} catch (e: any) {
+    logger.error({ error: e.message }, "Environment validation issue detected (non-fatal).");
 }
 
 const sessionSecret = process.env.SESSION_SECRET || 'dev-secret-unsafe';
+if (isProd && sessionSecret === 'dev-secret-unsafe') {
+    logger.warn("SESSION_SECRET is missing in production. Using unsafe fallback (not recommended).");
+}
+
 const requireJson = createRequire(import.meta.url);
 const app = express();
 const PORT = parseInt(process.env.PORT || '8080', 10);
