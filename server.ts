@@ -193,9 +193,14 @@ const csrfProtection = csurf({
 // --- Election Data Loading ---
 let electionData: any = { states: [] };
 try {
-    electionData = requireJson('./data/elections.json');
+    const electionPath = path.join(process.cwd(), 'data', 'elections.json');
+    if (fs.existsSync(electionPath)) {
+        electionData = JSON.parse(fs.readFileSync(electionPath, 'utf8'));
+    } else {
+        logger.warn(`elections.json not found at ${electionPath} — /api/constituency will return empty results.`);
+    }
 } catch (e) {
-    logger.warn('Could not load elections.json — /api/constituency will return empty results.');
+    logger.warn({ err: e }, 'Could not load elections.json — /api/constituency will return empty results.');
 }
 
 const constituencyIndex = new Map<string, any>();
