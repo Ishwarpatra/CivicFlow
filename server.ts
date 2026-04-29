@@ -1,4 +1,5 @@
 import express from 'express';
+import crypto from 'crypto';
 import dotenv from 'dotenv';
 import path from 'path';
 import multer from 'multer';
@@ -66,9 +67,9 @@ try {
     logger.error({ error: e.message }, "Environment validation issue detected (non-fatal).");
 }
 
-const sessionSecret = process.env.SESSION_SECRET || 'dev-secret-unsafe';
-if (isProd && sessionSecret === 'dev-secret-unsafe') {
-    logger.warn("SESSION_SECRET is missing in production. Using unsafe fallback (not recommended).");
+const sessionSecret = process.env.SESSION_SECRET || (isProd ? crypto.randomBytes(32).toString('hex') : 'dev-secret-unsafe');
+if (isProd && !process.env.SESSION_SECRET) {
+    logger.warn("SESSION_SECRET is missing in production. Using a dynamically generated random secret. Sessions will be invalidated on every container restart.");
 }
 
 const requireJson = createRequire(import.meta.url);
