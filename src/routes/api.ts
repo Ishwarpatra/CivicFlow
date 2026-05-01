@@ -16,6 +16,7 @@ import { Database } from 'better-sqlite3';
 import { Logger } from 'pino';
 import { handleChat } from '../chatHandler.js';
 import { SYSTEM_CONSTANTS } from '../constants.js';
+import { PersistenceManager } from '../persistence.js';
 
 const chatSchema = z.object({
     message: z.string().min(1).max(500),
@@ -25,6 +26,7 @@ const chatSchema = z.object({
 
 export function createApiRouter(db: Database, logger: Logger, upload: any, chatLimiter: any, electionData?: any, firestoreDb?: any) {
     const router = express.Router();
+    const persistence = new PersistenceManager(db, firestoreDb, logger);
 
     // Use standard urlencoded body parsing for HTMX forms
     router.post('/chat', chatLimiter, async (req: express.Request, res: express.Response) => {
@@ -92,7 +94,7 @@ export function createApiRouter(db: Database, logger: Logger, upload: any, chatL
 
             const formattedHistory: ChatHistoryItem[] = dbHistory.map((item) => ({
                 role: item.role,
-                text: (item as any).parts && Array.isArray((item as any).parts) ? (item as any).parts[0].text : (item as any).parts || item.text,
+                text: item.text,
             }));
 
             const { agentHtml, newHistory } = await handleChat(message, formattedHistory, locale as string, apiKey, userContext);
@@ -132,33 +134,14 @@ export function createApiRouter(db: Database, logger: Logger, upload: any, chatL
             return res.status(401).send(generateLoginToVoteHtml());
         }
 
-        try {
-            // Write to SQLite (local persistence)
-            db.prepare("INSERT INTO votes (user_id) VALUES (?)").run(sess.userId);
-
-            // Dual-write to Firestore (cloud persistence — survives Cloud Run restarts)
-            if (firestoreDb) {
-                try {
-                    const voteRef = firestoreDb.collection('votes').doc(`${sess.userId}_general_2026`);
-                    await voteRef.set({
-                        userId: sess.userId,
-                        email: sess.email || null,
-                        electionId: 'general_2026',
-                        timestamp: new Date().toISOString(),
-                    }, { merge: true });
-                } catch (fbErr: unknown) {
-                    logger.warn({ err: fbErr }, 'Firestore vote write failed (non-fatal)');
-                }
-            }
-
+        const result = await persistence.recordVote(sess.userId, sess.email || null);
+        
+        if (result === 'success') {
             res.send(generateVoteSuccessHtml());
-        } catch (e: any) {
-            if (e.message.includes('UNIQUE constraint failed')) {
-                res.send(generateAlreadyVotedHtml());
-            } else {
-                logger.error({ err: e }, "Vote Error");
-                res.status(500).send(generateVoteErrorHtml());
-            }
+        } else if (result === 'already_voted') {
+            res.send(generateAlreadyVotedHtml());
+        } else {
+            res.status(500).send(generateVoteErrorHtml());
         }
     });
 

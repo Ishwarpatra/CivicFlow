@@ -24,8 +24,9 @@ import { validateEnv } from './src/utils/validateEnv.js';
 import { createApiRouter } from './src/routes/api.js';
 import { initFirebase } from './src/firebaseAdmin.js';
 import { fetchRepresentativesByAddress } from './src/civicApiService.js';
+import { PersistenceManager } from './src/persistence.js';
 
-import { ChatHistoryItem } from './src/types.js';
+import { ChatHistoryItem, User } from './src/types.js';
 
 // --- Session Interface ---
 declare module 'express-session' {
@@ -265,7 +266,7 @@ app.get('/api/health', (req: express.Request, res: express.Response) => {
 
 app.get('/api/auth/me', (req: express.Request, res: express.Response) => {
     if (!req.session.userId) return res.json({ success: false });
-    const user = db.prepare("SELECT email, role, prompt_credits FROM users WHERE id = ?").get(req.session.userId) as any;
+    const user = db.prepare("SELECT email, role, prompt_credits FROM users WHERE id = ?").get(req.session.userId) as User | undefined;
     if (user) {
         res.json({ success: true, user: { email: user.email, role: user.role, credits: user.prompt_credits } });
     } else {
@@ -287,9 +288,15 @@ app.post('/api/register', async (req: express.Request, res: express.Response) =>
         const stmt = db.prepare("INSERT INTO users (email, password_hash) VALUES (?, ?)");
         const result = stmt.run(email, password_hash);
         
-        req.session.userId = Number(result.lastInsertRowid);
+        const userId = Number(result.lastInsertRowid);
+        req.session.userId = userId;
         req.session.email = email;
         req.session.role = 'voter';
+
+        // Sync from cloud on registration
+        const persistence = new PersistenceManager(db, firestoreDb, logger);
+        await persistence.syncFromCloud(userId);
+
         res.json({ success: true, email, role: 'voter', credits: 0 });
     } catch (e: any) {
         if (e.message.includes('UNIQUE constraint failed')) {
@@ -333,7 +340,7 @@ app.post('/api/login', async (req: express.Request, res: express.Response) => {
     if (!email || !password) return res.status(400).json({ success: false, message: 'Missing credentials' });
 
     try {
-        const user = db.prepare("SELECT * FROM users WHERE email = ?").get(email) as any;
+        const user = db.prepare("SELECT * FROM users WHERE email = ?").get(email) as User | undefined;
         if (!user || !(await bcrypt.compare(password, user.password_hash))) {
             return res.status(401).json({ success: false, message: 'Invalid credentials' });
         }
@@ -341,6 +348,11 @@ app.post('/api/login', async (req: express.Request, res: express.Response) => {
         req.session.userId = user.id;
         req.session.email = user.email;
         req.session.role = user.role;
+
+        // Sync from cloud on login
+        const persistence = new PersistenceManager(db, firestoreDb, logger);
+        await persistence.syncFromCloud(user.id);
+
         res.json({ success: true, email: user.email, role: user.role, credits: user.prompt_credits });
     } catch (e: any) {
         logger.error({ err: e }, "Login Error");
@@ -357,7 +369,7 @@ app.post('/api/logout', (req: express.Request, res: express.Response) => {
 
 app.get('/api/settings', (req: express.Request, res: express.Response) => {
     if (!req.session.userId) return res.status(401).json({ success: false, message: 'Unauthorized' });
-    const user = db.prepare("SELECT epic_number, state, constituency, language_preference FROM users WHERE id = ?").get(req.session.userId) as any;
+    const user = db.prepare("SELECT epic_number, state, constituency, language_preference FROM users WHERE id = ?").get(req.session.userId) as User | undefined;
     res.json({ success: true, settings: user });
 });
 
