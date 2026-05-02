@@ -2,8 +2,8 @@ import DOMPurify from "isomorphic-dompurify";
 
 const buildChatBubble = (iconContent: string, iconBg: string, bubbleBg: string, bubbleBorder: string, bubbleShadow: string, textStyle: string, message: string, customClasses: string = "", extraAttrs: string = "") => `
     <div x-data="{ show: false }" x-init="setTimeout(() => show = true, 50)" :class="show ? 'chat-bubble-entered' : 'chat-bubble-enter'" class="spring-m3 flex gap-4 ${customClasses}">
-        <div class="w-8 h-8 ${iconBg} text-white flex items-center justify-center text-xs font-bold shrink-0 border border-[#1A1A1A]">${iconContent}</div>
-        <div ${extraAttrs} class="p-4 ${bubbleBg} ${textStyle} text-sm leading-relaxed max-w-[85%] sm:max-w-[80%] border ${bubbleBorder} ${bubbleShadow}">
+        <div role="img" aria-label="${iconContent === 'YOU' ? 'User' : 'AI'} Avatar" class="w-8 h-8 ${iconBg} text-white flex items-center justify-center text-xs font-bold shrink-0 border border-[#1A1A1A]">${iconContent}</div>
+        <div ${extraAttrs} role="log" aria-live="polite" class="p-4 ${bubbleBg} ${textStyle} text-sm leading-relaxed max-w-[85%] sm:max-w-[80%] border ${bubbleBorder} ${bubbleShadow}">
             ${message}
         </div>
     </div>
@@ -57,7 +57,7 @@ export const generateRepInsightsHtml = () => `
             <div class="mt-4 flex justify-between items-center bg-[#F0F0F0] p-2 border-2 border-[#1A1A1A] shadow-[2px_2px_0px_#1A1A1A]">
                 <p class="text-xs font-bold uppercase pl-2 flex-1">Mark as Voted?</p>
                 <form hx-post="/api/vote" hx-swap="outerHTML">
-                    <button type="submit" class="bg-white text-[#1A1A1A] hover:bg-[#FF9933] hover:text-white px-3 py-2 border-2 border-[#1A1A1A] font-bold text-xs uppercase tracking-widest relative transition-colors flex items-center gap-2 group cursor-pointer shadow-[2px_2px_0px_#1A1A1A] active:translate-y-[2px] active:shadow-none">
+                    <button type="submit" aria-label="Cast your vote now" class="bg-white text-[#1A1A1A] hover:bg-[#FF9933] hover:text-white px-3 py-2 border-2 border-[#1A1A1A] font-bold text-xs uppercase tracking-widest relative transition-colors flex items-center gap-2 group cursor-pointer shadow-[2px_2px_0px_#1A1A1A] active:translate-y-[2px] active:shadow-none">
                         <span>VOTE NOW</span>
                     </button>
                 </form>

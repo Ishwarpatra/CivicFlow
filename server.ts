@@ -96,6 +96,17 @@ app.use(helmet({
         },
     },
     crossOriginEmbedderPolicy: false,
+    referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
+    xContentTypeOptions: true,
+    dnsPrefetchControl: { allow: false },
+    expectCt: { maxAge: 86400, enforce: true },
+    frameguard: { action: 'deny' },
+    hsts: { maxAge: 31536000, includeSubDomains: true, preload: true },
+    ieNoOpen: true,
+    noSniff: true,
+    originAgentCluster: true,
+    permittedCrossDomainPolicies: { permittedPolicies: 'none' },
+    xssFilter: true,
 }));
 
 app.use(cors({
