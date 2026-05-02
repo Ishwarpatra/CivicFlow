@@ -52,13 +52,13 @@ CivicFlow is built on the principle of **"Single Point of Truth"** unification.
 
 ## Google Services Used
 
-| Service | Purpose | Status |
-|---|---|---|
-| **Gemini 2.5 Flash** | Conversational AI civic navigator | ✅ Active |
-| **Google Civic Information API** | Real representatives data by address | ✅ Active |
-| **Google Maps Embed API** | Polling booth map with user GPS | ✅ Active |
-| **Firebase Firestore** | Persistent vote records across Cloud Run restarts | ✅ Active |
-| **Google Analytics 4** | Usage telemetry | ✅ Integrated |
+| Service | Purpose | Integration Details |
+|---|---|---|---|
+| **Gemini 2.5 Flash** | Conversational AI civic navigator | Uses `system_instruction` for civic context and `google_search` tool for real-time verification. |
+| **Google Civic Information API** | Real representatives data by address | Direct integration via `civicinfo.googleapis.com` to fetch verified ECI representative data. |
+| **Google Maps Embed API** | Polling booth map with user GPS | Dynamic map rendering based on browser geolocation to guide users to their nearest booth. |
+| **Firebase Firestore** | Persistent vote records | Ensures civic engagement data (votes) survives container restarts on Google Cloud Run. |
+| **Google Analytics 4** | Usage telemetry | Tracks user engagement metrics to optimize civic information delivery. |
 
 ---
 
@@ -185,8 +185,9 @@ npm run build
 
 ## Vertical & Social Impact
 
-**Civic Election Navigation** — Aligned with the **AI for Social Good** initiative, specifically targeting:
-- **100M+ First-time Voters**: Providing a simplified, non-intimidating entry point into civic life.
-- **Linguistic Inclusion**: Bridging the digital divide with native language support (Hindi/English).
-- **Informed Electorate**: Reducing misinformation by providing direct, verifiable links to ECI data.
-- **Accessibility**: Ensuring that civic information is reachable for users with disabilities through semantic HTML and ARIA compliance.
+**Civic Election Navigation** — This project is a direct response to the **AI for Social Good** initiative, specifically targeting the democratic challenges of the 2025-2026 Indian election cycle:
+
+- **Empowering 100M+ First-time Voters**: By translating complex ECI documentation into a friendly conversational interface, we lower the barrier to democratic participation.
+- **Bridging the Digital & Linguistic Divide**: With native support for Hindi and English, and a mobile-first HTMX architecture, we ensure civic data is accessible to users with limited data plans and diverse linguistic backgrounds.
+- **Combatting Electoral Misinformation**: By serving as a "Single Point of Truth" that pulls directly from verified Google Civic and ECI sources, we provide a trusted alternative to unverified social media information.
+- **Radical Accessibility**: Built with strict adherence to WCAG 2.1 standards, including semantic HTML, ARIA landmarks, and high-contrast Neobrutalist design, ensuring that elderly and disabled voters are not left behind.

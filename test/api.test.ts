@@ -132,4 +132,29 @@ describe('API Router Integration', () => {
             expect(response.text).toContain('System Logs');
         });
     });
+
+    describe('Error Handling', () => {
+        it('returns 500 if session is missing', async () => {
+            // Create a temporary app without session middleware
+            const noSessApp = express();
+            noSessApp.use(express.json());
+            noSessApp.use('/api', createApiRouter(db, logger, {}, (req: any, res: any, next: any) => next()));
+            
+            const response = await request(noSessApp).post('/api/chat').send({ message: 'test' });
+            expect(response.status).toBe(500);
+            expect(response.text).toContain('Session initialization failed');
+        });
+
+        it('handles unexpected errors in chat route', async () => {
+            const { handleChat } = await import('../src/chatHandler.js');
+            (handleChat as any).mockRejectedValueOnce(new Error('Unexpected Crash'));
+            
+            const response = await request(app)
+                .post('/api/chat')
+                .send({ message: 'crash me' });
+            
+            expect(response.status).toBe(500);
+            expect(response.text).toContain('AI processing failed');
+        });
+    });
 });

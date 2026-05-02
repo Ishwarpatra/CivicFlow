@@ -32,11 +32,12 @@ export class PersistenceManager {
                 }
             }
             return 'success';
-        } catch (e: any) {
-            if (e.message?.includes('UNIQUE constraint failed')) {
+        } catch (e: unknown) {
+            const errorMessage = e instanceof Error ? e.message : String(e);
+            if (errorMessage.includes('UNIQUE constraint failed')) {
                 return 'already_voted';
             }
-            this.logger.error({ err: e }, "Persistence Error: recordVote");
+            this.logger.error({ err: errorMessage }, "Persistence Error: recordVote");
             return 'error';
         }
     }

@@ -124,13 +124,16 @@ app.use(helmet({
     contentSecurityPolicy: {
         directives: {
             "default-src": ["'self'"],
-            "script-src": ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https://unpkg.com", "https://www.googletagmanager.com", "https://maps.googleapis.com"],
+            "script-src": ["'self'", "'unsafe-inline'", "https://unpkg.com", "https://www.googletagmanager.com", "https://maps.googleapis.com"],
             "style-src": ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
             "font-src": ["'self'", "https://fonts.gstatic.com"],
             "img-src": ["'self'", "data:", "https://images.unsplash.com", "https://maps.gstatic.com", "https://maps.googleapis.com"],
             "connect-src": ["'self'", "https://civicinfo.googleapis.com", "https://maps.googleapis.com"],
             "frame-src": ["'self'", "https://www.google.com"],
-            "frame-ancestors": ["'none'"]
+            "frame-ancestors": ["'none'"],
+            "object-src": ["'none'"],
+            "base-uri": ["'self'"],
+            "form-action": ["'self'"]
         },
     },
     crossOriginEmbedderPolicy: false,

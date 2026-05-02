@@ -46,7 +46,12 @@ export async function fetchRepresentativesByAddress(address: string): Promise<Ci
             return { representatives: [], source: 'fallback', error: `Civic API error: ${response.status}` };
         }
 
-        const data = await response.json() as { offices?: any[], officials?: any[], normalizedInput?: any };
+        interface CivicApiResponse {
+            offices?: Array<{ name: string; officialIndices?: number[] }>;
+            officials?: Array<{ name: string; party?: string; photoUrl?: string; urls?: string[]; phones?: string[] }>;
+            normalizedInput?: { line1?: string; city?: string; state?: string };
+        }
+        const data = await response.json() as CivicApiResponse;
 
         // Map offices → officials
         const reps: CivicRepresentative[] = [];
@@ -74,8 +79,9 @@ export async function fetchRepresentativesByAddress(address: string): Promise<Ci
             : address;
 
         return { representatives: reps, normalizedAddress, source: 'google_civic_api' };
-    } catch (e: any) {
-        return { representatives: [], source: 'fallback', error: e.message };
+    } catch (e: unknown) {
+        const errorMessage = e instanceof Error ? e.message : String(e);
+        return { representatives: [], source: 'fallback', error: errorMessage };
     }
 }
 
@@ -99,14 +105,20 @@ export async function fetchPollingLocationsByAddress(address: string): Promise<C
             return { representatives: [], source: 'fallback', error: `Civic API error: ${response.status}` };
         }
 
-        const data = await response.json() as { pollingLocations?: any[] };
+        interface VoterInfoResponse {
+            pollingLocations?: Array<{
+                address?: { locationName?: string; line1?: string; city?: string; state?: string };
+            }>;
+        }
+        const data = await response.json() as VoterInfoResponse;
         const locations: { address: string; name: string }[] = (data.pollingLocations || []).map((loc) => ({
             name: loc.address?.locationName || 'Polling Location',
             address: [loc.address?.line1, loc.address?.city, loc.address?.state].filter(Boolean).join(', '),
         }));
 
         return { representatives: [], pollingLocations: locations, source: 'google_civic_api' };
-    } catch (e: any) {
-        return { representatives: [], source: 'fallback', error: e.message };
+    } catch (e: unknown) {
+        const errorMessage = e instanceof Error ? e.message : String(e);
+        return { representatives: [], source: 'fallback', error: errorMessage };
     }
 }

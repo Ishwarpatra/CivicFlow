@@ -34,7 +34,10 @@ const chatSchema = z.object({
     apiKey: z.string().max(255).optional(),
 });
 
-export function createApiRouter(db: Database, logger: Logger, upload: any, chatLimiter: any, electionData?: any, firestoreDb?: any) {
+import { Firestore } from 'firebase-admin/firestore';
+import { RequestHandler } from 'express';
+
+export function createApiRouter(db: Database, logger: Logger, upload: any, chatLimiter: RequestHandler, electionData: Record<string, unknown> | null = null, firestoreDb: Firestore | null = null) {
     const router = express.Router();
     const persistence = new PersistenceManager(db, firestoreDb, logger);
 
@@ -109,9 +112,9 @@ export function createApiRouter(db: Database, logger: Logger, upload: any, chatL
 
             const { agentHtml, newHistory } = await handleChat(message, formattedHistory, locale as string, apiKey, userContext);
 
-            const serializableHistory: ChatHistoryItem[] = newHistory.map((item: any) => ({
+            const serializableHistory: ChatHistoryItem[] = newHistory.map((item) => ({
                 role: item.role,
-                text: item.parts?.[0]?.text || item.text || "",
+                text: item.text || "",
             }));
 
             let safeNewHistory = serializableHistory;
@@ -132,8 +135,9 @@ export function createApiRouter(db: Database, logger: Logger, upload: any, chatL
 
             htmlResponse += generateAgentMessageHtml(agentHtml);
             res.send(htmlResponse);
-        } catch (e: any) {
-            logger.error({ err: e }, "Chat Error");
+        } catch (e: unknown) {
+            const errorMessage = e instanceof Error ? e.message : String(e);
+            logger.error({ err: errorMessage }, "Chat Error");
             res.status(500).send(htmlResponse + generateErrorHtml("AI processing failed. Please try again."));
         }
     });

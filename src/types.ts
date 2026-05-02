@@ -36,7 +36,7 @@ export interface UserContext {
     user: Partial<User> | null;
     constituency?: Constituency;
     representatives?: Candidate[];
-    electionData?: any;
+    electionData?: Record<string, unknown> | null;
 }
 
 export interface ChatSessionRow {
