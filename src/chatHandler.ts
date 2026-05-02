@@ -1,4 +1,4 @@
-import { getGeminiModel } from "./aiService.js";
+import { getGeminiModel, GeminiModel } from "./aiService.js";
 import { marked } from "marked";
 import DOMPurify from "isomorphic-dompurify";
 import {
@@ -12,7 +12,13 @@ import { SYSTEM_CONSTANTS } from "./constants.js";
 import { fetchRepresentativesByAddress } from "./civicApiService.js";
 import { ChatHistoryItem, UserContext } from "./types.js";
 
-export const handleChat = async (message: string, history: ChatHistoryItem[] = [], locale: string = "en", apiKey?: string, userContext?: UserContext) => {
+export const handleChat = async (
+    message: string, 
+    history: ChatHistoryItem[] = [], 
+    locale: string = "en", 
+    apiKey?: string, 
+    userContext?: UserContext
+): Promise<{ agentHtml: string; newHistory: ChatHistoryItem[] }> => {
 
     // Sequoia Pitch Auto-Demo Handler
     if (message === SYSTEM_CONSTANTS.COMMANDS.START_PITCH) {
@@ -75,7 +81,7 @@ export const handleChat = async (message: string, history: ChatHistoryItem[] = [
     }
 
     try {
-        const ai = getGeminiModel(apiKey);
+        const ai: GeminiModel = getGeminiModel(apiKey);
 
         let responseText = "";
 
@@ -153,7 +159,7 @@ export const handleChat = async (message: string, history: ChatHistoryItem[] = [
 
         const contents = [...cleanHistory, { role: 'user', parts: [{ text: message }] }];
 
-        const response = await ai.models.generateContent({
+        const response = await (ai.models as any).generateContent({
             model: 'gemini-2.5-flash',
             contents: contents,
             config: {

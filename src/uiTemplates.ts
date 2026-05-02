@@ -120,13 +120,21 @@ export const generateVoteErrorHtml = () => `<button disabled class="m3-button-er
 export const generateLoginToVoteHtml = () => `<button disabled class="m3-button-disabled">Log in to vote</button>`;
 export const generateCreditUpdateScript = (amount: number) => `<script>document.dispatchEvent(new CustomEvent('update-credits', { detail: ${amount} }));</script>`;
 
-export function generateAdminLogsHtml(logs: any[], isPartial: boolean): string {
+export interface LogEntry {
+    time: number;
+    level: number;
+    msg?: string;
+    err?: { message?: string } | any;
+}
+
+export function generateAdminLogsHtml(logs: LogEntry[], isPartial: boolean): string {
     const rows = logs.map(log => {
         const safeMsg = DOMPurify.sanitize(log.msg || '');
         const safeErr = DOMPurify.sanitize(log.err ? log.err.message || JSON.stringify(log.err) : '');
+        const dateStr = isNaN(log.time) ? 'Invalid Date' : new Date(log.time).toLocaleString();
         return `
         <tr class="border-b border-black hover:bg-gray-100">
-            <td class="p-2 text-xs font-mono">${new Date(log.time).toLocaleString()}</td>
+            <td class="p-2 text-xs font-mono">${dateStr}</td>
             <td class="p-2 text-xs font-bold ${log.level >= 50 ? 'text-red-600' : 'text-green-600'}">${log.level >= 50 ? 'ERR' : 'INFO'}</td>
             <td class="p-2 text-xs break-all">${safeMsg}</td>
             <td class="p-2 text-[10px] font-mono opacity-60">${safeErr}</td>

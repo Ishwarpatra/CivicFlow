@@ -13,6 +13,7 @@ export default defineConfig({
                 'public/**',
                 '**/*.d.ts',
                 'vitest.config.ts',
+                'scratch/**',
             ],
         },
     },

@@ -1,260 +1,135 @@
-/**
- * API integration tests for CivicFlow
- * Tests: /api/login, /api/vote, /api/chat, /api/health, /api/admin/logs
- */
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import express from 'express';
 import request from 'supertest';
+import { createApiRouter } from '../src/routes/api.js';
+import Database from 'better-sqlite3';
+import pino from 'pino';
 
-// ─── Minimal app factory (no real DB, no real sessions) ─────────────────────
-function buildTestApp() {
-    const app = express();
-    app.use(express.json());
-    app.use(express.urlencoded({ extended: true }));
+// Mock handleChat to avoid calling real AI
+vi.mock('../src/chatHandler.js', () => ({
+    handleChat: vi.fn().mockResolvedValue({
+        agentHtml: '<div>AI Response</div>',
+        newHistory: [{ role: 'user', text: 'hello' }, { role: 'model', text: 'AI Response' }]
+    })
+}));
 
-    // Inject a simple session-like middleware for tests
-    app.use((req: any, _res: any, next: any) => {
-        req.session = req._testSession || {};
-        next();
-    });
+describe('API Router Integration', () => {
+    let app: express.Express;
+    let db: any;
+    let logger: any;
 
-    return app;
-}
-
-// ─── /api/health ─────────────────────────────────────────────────────────────
-describe('GET /api/health', () => {
-    it('returns 200 with status ok when DB is reachable', async () => {
-        const app = buildTestApp();
-
-        // Mock DB
-        const mockDb = { prepare: () => ({ get: () => 1 }) };
-        const electionData = { states: [{ name: 'Tamil Nadu' }, { name: 'Kerala' }] };
-
-        app.get('/api/health', (_req, res) => {
-            try {
-                mockDb.prepare('SELECT 1').get();
-                res.json({ status: 'ok', electionStates: electionData.states?.length ?? 0 });
-            } catch {
-                res.status(500).json({ status: 'error', message: 'Database connection failed' });
-            }
-        });
-
-        const response = await request(app).get('/api/health');
-        expect(response.status).toBe(200);
-        expect(response.body.status).toBe('ok');
-        expect(response.body.electionStates).toBe(2);
-    });
-
-    it('returns 500 when DB throws', async () => {
-        const app = buildTestApp();
-
-        app.get('/api/health', (_req, res) => {
-            try {
-                throw new Error('DB error');
-            } catch {
-                res.status(500).json({ status: 'error', message: 'Database connection failed' });
-            }
-        });
-
-        const response = await request(app).get('/api/health');
-        expect(response.status).toBe(500);
-        expect(response.body.status).toBe('error');
-    });
-});
-
-// ─── /api/login ──────────────────────────────────────────────────────────────
-describe('POST /api/login', () => {
-    it('assigns role voter for non-admin email', async () => {
-        const app = buildTestApp();
-
-        // Mock route: mirror server.ts logic without real bcrypt
-        app.post('/api/login', (req: any, res) => {
-            const { email } = req.body;
-            if (!email) return res.status(400).json({ success: false, message: 'Missing credentials' });
-
-            // Simplified: any valid email → voter; admin@example.com → admin
-            const role = email === 'admin@example.com' ? 'admin' : 'voter';
-            req.session.email = email;
-            req.session.role = role;
-            res.json({ success: true, email, role, credits: 0 });
-        });
-
-        const response = await request(app)
-            .post('/api/login')
-            .send({ email: 'user@test.com', password: 'password123' });
-
-        expect(response.status).toBe(200);
-        expect(response.body.success).toBe(true);
-        expect(response.body.role).toBe('voter');
-        expect(response.body.email).toBe('user@test.com');
-    });
-
-    it('assigns role admin for admin@example.com', async () => {
-        const app = buildTestApp();
-
-        app.post('/api/login', (req: any, res) => {
-            const { email } = req.body;
-            if (!email) return res.status(400).json({ success: false, message: 'Missing credentials' });
-            const role = email === 'admin@example.com' ? 'admin' : 'voter';
-            req.session.email = email;
-            req.session.role = role;
-            res.json({ success: true, email, role, credits: 0 });
-        });
-
-        const response = await request(app)
-            .post('/api/login')
-            .send({ email: 'admin@example.com', password: 'password123' });
-
-        expect(response.status).toBe(200);
-        expect(response.body.role).toBe('admin');
-    });
-
-    it('returns 400 for missing credentials', async () => {
-        const app = buildTestApp();
-
-        app.post('/api/login', (req: any, res) => {
-            const { email, password } = req.body;
-            if (!email || !password) return res.status(400).json({ success: false, message: 'Missing credentials' });
-            res.json({ success: true });
-        });
-
-        const response = await request(app).post('/api/login').send({});
-        expect(response.status).toBe(400);
-        expect(response.body.success).toBe(false);
-    });
-});
-
-// ─── /api/vote ───────────────────────────────────────────────────────────────
-describe('POST /api/vote', () => {
-    it('records a vote row using session userId', async () => {
-        const app = buildTestApp();
-        const insertedValues: any[] = [];
-
-        const mockDb = {
-            prepare: (sql: string) => ({
-                run: (...args: any[]) => { insertedValues.push({ sql, args }); },
-            }),
-        };
-
-        // Inject session
+    beforeEach(() => {
+        db = new Database(':memory:');
+        db.exec(`
+            CREATE TABLE users (id INTEGER PRIMARY KEY, email TEXT, prompt_credits INTEGER DEFAULT 10, state TEXT, constituency TEXT, epic_number TEXT);
+            CREATE TABLE chat_sessions (id INTEGER PRIMARY KEY, user_id INTEGER, history TEXT, updated_at DATETIME DEFAULT CURRENT_TIMESTAMP);
+            CREATE TABLE votes (id INTEGER PRIMARY KEY, user_id INTEGER, election_id TEXT, timestamp DATETIME DEFAULT CURRENT_TIMESTAMP, UNIQUE(user_id, election_id));
+            CREATE TABLE constituencies (id INTEGER PRIMARY KEY, name TEXT, state TEXT);
+            CREATE TABLE candidates (id INTEGER PRIMARY KEY, name TEXT, party TEXT, constituency_id INTEGER, incumbent INTEGER);
+        `);
+        
+        logger = pino({ enabled: false });
+        app = express();
+        app.use(express.json());
+        
+        // Better session mock
         app.use((req: any, _res, next) => {
-            req.session.userId = 42;
-            req.session.email = 'voter@test.com';
+            req.session = req.headers['x-test-session'] 
+                ? JSON.parse(req.headers['x-test-session'] as string) 
+                : {};
             next();
         });
 
-        app.post('/api/vote', (req: any, res) => {
-            const sess = req.session;
-            if (!sess?.userId) return res.status(401).send('Log in to vote');
-            mockDb.prepare("INSERT INTO votes (user_id) VALUES (?)").run(sess.userId);
-            res.send('<button disabled>VOTED</button>');
-        });
-
-        const response = await request(app).post('/api/vote').send({});
-        expect(response.status).toBe(200);
-        expect(response.text).toContain('VOTED');
-        expect(insertedValues).toHaveLength(1);
-        expect(insertedValues[0].args).toEqual([42]);
+        const upload = {};
+        const chatLimiter = (req: any, res: any, next: any) => next();
+        
+        app.use('/api', createApiRouter(db, logger, upload, chatLimiter));
     });
 
-    it('returns 401 when user is not logged in', async () => {
-        const app = buildTestApp();
-
-        app.post('/api/vote', (req: any, res) => {
-            if (!req.session?.userId) return res.status(401).send('Log in to vote');
-            res.send('<button disabled>VOTED</button>');
+    describe('POST /api/chat', () => {
+        it('returns 400 for empty message', async () => {
+            const response = await request(app).post('/api/chat').send({ message: '' });
+            expect(response.status).toBe(400);
         });
 
-        const response = await request(app).post('/api/vote').send({});
-        expect(response.status).toBe(401);
-    });
-});
-
-// ─── /api/chat ───────────────────────────────────────────────────────────────
-describe('POST /api/chat', () => {
-    it('returns 400 for messages over 500 characters', async () => {
-        const app = buildTestApp();
-        const { z } = await import('zod');
-
-        const chatSchema = z.object({
-            message: z.string().min(1).max(500),
+        it('works for anonymous users', async () => {
+            const response = await request(app)
+                .post('/api/chat')
+                .send({ message: 'Hello' });
+            expect(response.status).toBe(200);
+            expect(response.text).toContain('AI Response');
         });
 
-        app.post('/api/chat', (req, res) => {
-            const result = chatSchema.safeParse(req.body);
-            if (!result.success) {
-                return res.status(400).send('<div class="error">Invalid input format.</div>');
-            }
-            res.send('<div>OK</div>');
+        it('awards credits and saves history for logged in users', async () => {
+            db.prepare("INSERT INTO users (id, email, prompt_credits) VALUES (1, 'user@test.com', 10)").run();
+            const session = JSON.stringify({ userId: 1 });
+
+            const response = await request(app)
+                .post('/api/chat')
+                .set('x-test-session', session)
+                .send({ message: 'KNOW_REP' });
+
+            expect(response.status).toBe(200);
+            expect(response.text).toContain('update-credits');
+            
+            const user = db.prepare("SELECT prompt_credits FROM users WHERE id = 1").get();
+            expect(user.prompt_credits).toBe(20);
+
+            const chatSession = db.prepare("SELECT * FROM chat_sessions WHERE user_id = 1").get();
+            expect(chatSession).toBeDefined();
+            expect(JSON.parse(chatSession.history)).toHaveLength(2);
         });
-
-        const longMessage = 'A'.repeat(501);
-        const response = await request(app)
-            .post('/api/chat')
-            .send({ message: longMessage });
-
-        expect(response.status).toBe(400);
-        expect(response.text).toContain('Invalid input format.');
     });
 
-    it('returns 200 for valid messages', async () => {
-        const app = buildTestApp();
-        const { z } = await import('zod');
-
-        const chatSchema = z.object({ message: z.string().min(1).max(500) });
-
-        app.post('/api/chat', (req, res) => {
-            const result = chatSchema.safeParse(req.body);
-            if (!result.success) return res.status(400).send('error');
-            res.send('<div>Response OK</div>');
+    describe('POST /api/vote', () => {
+        it('returns 401 if not logged in', async () => {
+            const response = await request(app).post('/api/vote');
+            expect(response.status).toBe(401);
+            expect(response.text).toContain('Log in to vote');
         });
 
-        const response = await request(app)
-            .post('/api/chat')
-            .send({ message: 'Am I eligible to vote?' });
+        it('records vote for logged in user', async () => {
+            const session = JSON.stringify({ userId: 1, email: 'user@test.com' });
+            const response = await request(app)
+                .post('/api/vote')
+                .set('x-test-session', session);
+            
+            expect(response.status).toBe(200);
+            expect(response.text).toContain('VOTED');
 
-        expect(response.status).toBe(200);
-        expect(response.text).toContain('Response OK');
-    });
-});
-
-// ─── /api/admin/logs ─────────────────────────────────────────────────────────
-describe('GET /api/admin/logs', () => {
-    it('returns 403 for non-admin session', async () => {
-        const app = buildTestApp();
-
-        app.use((req: any, _res, next) => {
-            req.session.role = 'voter'; // not admin
-            next();
+            const vote = db.prepare("SELECT * FROM votes WHERE user_id = 1").get();
+            expect(vote).toBeDefined();
         });
 
-        app.get('/api/admin/logs', (req: any, res) => {
-            if (req.session.role !== 'admin') {
-                return res.status(403).send('<div>Access Denied</div>');
-            }
-            res.send('<div>Logs here</div>');
+        it('handles duplicate votes', async () => {
+            db.prepare("INSERT INTO votes (user_id, election_id) VALUES (1, 'general_2026')").run();
+            const session = JSON.stringify({ userId: 1, email: 'user@test.com' });
+            
+            const response = await request(app)
+                .post('/api/vote')
+                .set('x-test-session', session);
+            
+            expect(response.status).toBe(200);
+            expect(response.text).toContain('ALREADY VOTED');
         });
-
-        const response = await request(app).get('/api/admin/logs');
-        expect(response.status).toBe(403);
-        expect(response.text).toContain('Access Denied');
     });
 
-    it('returns 200 for admin session', async () => {
-        const app = buildTestApp();
-
-        app.use((req: any, _res, next) => {
-            req.session.role = 'admin';
-            next();
+    describe('GET /api/admin/logs', () => {
+        it('returns 403 for non-admin', async () => {
+            const session = JSON.stringify({ role: 'voter' });
+            const response = await request(app)
+                .get('/api/admin/logs')
+                .set('x-test-session', session);
+            expect(response.status).toBe(403);
         });
 
-        app.get('/api/admin/logs', (req: any, res) => {
-            if (req.session.role !== 'admin') return res.status(403).send('Access Denied');
-            res.send('<div>Logs here</div>');
+        it('returns 200 for admin', async () => {
+            const session = JSON.stringify({ role: 'admin' });
+            const response = await request(app)
+                .get('/api/admin/logs')
+                .set('x-test-session', session);
+            expect(response.status).toBe(200);
+            expect(response.text).toContain('System Logs');
         });
-
-        const response = await request(app).get('/api/admin/logs');
-        expect(response.status).toBe(200);
-        expect(response.text).toContain('Logs here');
     });
 });

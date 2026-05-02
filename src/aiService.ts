@@ -1,10 +1,12 @@
 import { GoogleGenAI } from "@google/genai";
 
-let genAiModels: any = null;
+let genAiModels: GoogleGenAI | null = null;
 
-export const resetGeminiModel = () => { genAiModels = null; };
+export const resetGeminiModel = (): void => { genAiModels = null; };
 
-export const getGeminiModel = (userApiKey?: string) => {
+export type GeminiModel = GoogleGenAI | "MOCK_MODE";
+
+export const getGeminiModel = (userApiKey?: string): GeminiModel => {
   if (genAiModels && !userApiKey) return genAiModels;
 
   let apiKey = userApiKey || process.env.GEMINI_API_KEY;

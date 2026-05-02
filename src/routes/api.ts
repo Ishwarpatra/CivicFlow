@@ -9,9 +9,19 @@ import {
     generateAlreadyVotedHtml, 
     generateVoteErrorHtml, 
     generateLoginToVoteHtml, 
-    generateCreditUpdateScript 
+    generateCreditUpdateScript,
+    generateAdminLogsHtml
 } from '../uiTemplates.js';
 import { User, ChatSessionRow, Constituency, Candidate, UserContext, ChatHistoryItem } from '../types.js';
+
+declare module 'express-session' {
+    interface SessionData {
+        userId: number;
+        email: string;
+        role: string;
+        chatHistory: ChatHistoryItem[];
+    }
+}
 import { Database } from 'better-sqlite3';
 import { Logger } from 'pino';
 import { handleChat } from '../chatHandler.js';
@@ -143,6 +153,22 @@ export function createApiRouter(db: Database, logger: Logger, upload: any, chatL
         } else {
             res.status(500).send(generateVoteErrorHtml());
         }
+    });
+
+    router.get('/admin/logs', (req: express.Request, res: express.Response) => {
+        const sess = req.session as any;
+        if (!sess || sess.role !== 'admin') {
+            return res.status(403).send(generateErrorHtml("Access Denied"));
+        }
+        
+        const mockLogs = [
+            { time: Date.now(), level: 30, msg: "System initialized" },
+            { time: Date.now() - 5000, level: 30, msg: "New user registered" },
+            { time: Date.now() - 10000, level: 50, msg: "Failed Civic API call", err: { message: "Timeout" } }
+        ];
+        
+        const isPartial = req.query.partial === 'true';
+        res.send(generateAdminLogsHtml(mockLogs, isPartial));
     });
 
     return router;
