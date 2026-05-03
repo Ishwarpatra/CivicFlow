@@ -1,6 +1,6 @@
-# CivicFlow — Intelligent Indian Election Navigator
+# CivicFlow Intelligent Indian Election Navigator
 
-**CivicFlow** is an AI-powered civic engagement platform that helps Indian citizens navigate the electoral process — from checking voter eligibility and finding their nearest polling booth to knowing their elected representatives — all in seconds and in multiple languages. 
+**CivicFlow** is an AI-powered civic engagement platform that helps Indian citizens navigate the electoral process from checking voter eligibility and finding their nearest polling booth to knowing their elected representatives all in seconds and in multiple languages. 
 
 **Evaluation Score: 95.53%** (Targeting 100% through optimized code quality, comprehensive testing, and strict accessibility compliance).
 
@@ -164,7 +164,7 @@ npm run coverage
 
 ```bash
 npm run build
-# Deploy dist/ to Cloud Run — Firestore ensures votes persist across container restarts
+# Deploy dist/ to Cloud Run Firestore ensures votes persist across container restarts
 ```
 
 ---
@@ -185,7 +185,7 @@ npm run build
 
 ## Vertical & Social Impact
 
-**Civic Election Navigation** — This project is a direct response to the **AI for Social Good** initiative, specifically targeting the democratic challenges of the 2025-2026 Indian election cycle:
+**Civic Election Navigation** This project is a direct response to the **AI for Social Good** initiative, specifically targeting the democratic challenges of the 2025-2026 Indian election cycle:
 
 - **Empowering 100M+ First-time Voters**: By translating complex ECI documentation into a friendly conversational interface, we lower the barrier to democratic participation.
 - **Bridging the Digital & Linguistic Divide**: With native support for Hindi and English, and a mobile-first HTMX architecture, we ensure civic data is accessible to users with limited data plans and diverse linguistic backgrounds.
