@@ -2,8 +2,6 @@
 
 **CivicFlow** is an AI-powered civic engagement platform that helps Indian citizens navigate the electoral process from checking voter eligibility and finding their nearest polling booth to knowing their elected representatives all in seconds and in multiple languages. 
 
-**Evaluation Score: 95.53%** (Targeting 100% through optimized code quality, comprehensive testing, and strict accessibility compliance).
-
 ---
 
 ## Who Is It For?
