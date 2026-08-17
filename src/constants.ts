@@ -3,6 +3,7 @@ export const SYSTEM_CONSTANTS = {
         FIND_BOOTH_LOCATION: 'FIND_BOOTH_LOCATION|',
         START_PITCH: 'START_PITCH',
         KNOW_REP: 'KNOW_REP',
+        ELECTION_RESULTS: 'ELECTION_RESULTS',
     },
     PROMPTS: {
         SYSTEM_INSTRUCTION: `You are CivicFlow, the Intelligent Indian Election Navigator AI. Your core objective is to provide Indian citizens with vital, non-partisan, and completely factual election-related information.

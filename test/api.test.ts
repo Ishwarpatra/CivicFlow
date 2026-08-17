@@ -26,6 +26,7 @@ describe('API Router Integration', () => {
             CREATE TABLE votes (id INTEGER PRIMARY KEY, user_id INTEGER, election_id TEXT, timestamp DATETIME DEFAULT CURRENT_TIMESTAMP, UNIQUE(user_id, election_id));
             CREATE TABLE constituencies (id INTEGER PRIMARY KEY, name TEXT, state TEXT);
             CREATE TABLE candidates (id INTEGER PRIMARY KEY, name TEXT, party TEXT, constituency_id INTEGER, incumbent INTEGER);
+            CREATE TABLE vote_sync_queue (id INTEGER PRIMARY KEY, vote_id INTEGER UNIQUE, status TEXT, last_error TEXT, attempts INTEGER DEFAULT 0, updated_at DATETIME DEFAULT CURRENT_TIMESTAMP);
         `);
         
         logger = pino({ enabled: false });
@@ -40,10 +41,9 @@ describe('API Router Integration', () => {
             next();
         });
 
-        const upload = {};
         const chatLimiter = (req: any, res: any, next: any) => next();
         
-        app.use('/api', createApiRouter(db, logger, upload, chatLimiter));
+        app.use('/api', createApiRouter(db, logger, chatLimiter));
     });
 
     describe('POST /api/chat', () => {
@@ -85,7 +85,7 @@ describe('API Router Integration', () => {
         it('returns 401 if not logged in', async () => {
             const response = await request(app).post('/api/vote');
             expect(response.status).toBe(401);
-            expect(response.text).toContain('Log in to vote');
+            expect(response.text).toContain('Sign in to record a vote');
         });
 
         it('records vote for logged in user', async () => {
@@ -95,10 +95,23 @@ describe('API Router Integration', () => {
                 .set('x-test-session', session);
             
             expect(response.status).toBe(200);
-            expect(response.text).toContain('VOTED');
+            expect(response.text).toContain('Vote recorded locally');
 
             const vote = db.prepare("SELECT * FROM votes WHERE user_id = 1").get();
             expect(vote).toBeDefined();
+        });
+
+        it('records the selected election and exposes status', async () => {
+            const session = JSON.stringify({ userId: 2, email: 'user2@test.com' });
+            const response = await request(app)
+                .post('/api/vote')
+                .set('x-test-session', session)
+                .send({ election_id: 'general_2024' });
+            expect(response.status).toBe(200);
+            const status = await request(app)
+                .get('/api/vote/status')
+                .set('x-test-session', session);
+            expect(status.body.votes[0].election_id).toBe('general_2024');
         });
 
         it('handles duplicate votes', async () => {
@@ -110,7 +123,7 @@ describe('API Router Integration', () => {
                 .set('x-test-session', session);
             
             expect(response.status).toBe(200);
-            expect(response.text).toContain('ALREADY VOTED');
+            expect(response.text).toContain('Already recorded');
         });
     });
 
@@ -138,7 +151,7 @@ describe('API Router Integration', () => {
             // Create a temporary app without session middleware
             const noSessApp = express();
             noSessApp.use(express.json());
-            noSessApp.use('/api', createApiRouter(db, logger, {}, (req: any, res: any, next: any) => next()));
+            noSessApp.use('/api', createApiRouter(db, logger, (req: any, res: any, next: any) => next()));
             
             const response = await request(noSessApp).post('/api/chat').send({ message: 'test' });
             expect(response.status).toBe(500);

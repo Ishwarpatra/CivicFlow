@@ -1,15 +1,16 @@
-import { getGeminiModel, GeminiModel } from "./aiService.js";
 import { marked } from "marked";
 import DOMPurify from "isomorphic-dompurify";
 import {
     generateSequoiaPitchHtml,
     generateRepInsightsHtml,
+    generateElectionResultsHtml,
     generateGenericOfflineFallbackHtml,
     generateOfflineEligibilityHtml,
     generateOfflineBoothHtml,
 } from "./uiTemplates.js";
 import { SYSTEM_CONSTANTS } from "./constants.js";
-import { fetchRepresentativesByAddress } from "./civicApiService.js";
+import { fetchRepresentativesByAddress, fetchPollingLocationsByAddress } from "./civicApiService.js";
+import { getGeminiModel, resetGeminiModel, GeminiModel } from "./aiService.js";
 import { ChatHistoryItem, UserContext } from "./types.js";
 
 export const handleChat = async (
@@ -19,14 +20,20 @@ export const handleChat = async (
     apiKey?: string, 
     userContext?: UserContext
 ): Promise<{ agentHtml: string; newHistory: ChatHistoryItem[] }> => {
+    history = history.slice(-20);
 
     // Sequoia Pitch Auto-Demo Handler
     if (message === SYSTEM_CONSTANTS.COMMANDS.START_PITCH) {
         return { agentHtml: generateSequoiaPitchHtml(), newHistory: history };
     }
 
+    if (message === SYSTEM_CONSTANTS.COMMANDS.ELECTION_RESULTS) {
+        return { agentHtml: generateElectionResultsHtml(userContext?.electionData), newHistory: history };
+    }
+
     // KNOW_REP: Try Google Civic Information API first, then local DB fallback, then demo
     if (message === SYSTEM_CONSTANTS.COMMANDS.KNOW_REP) {
+        let providerStatus: 'unavailable' | 'misconfigured' | 'rate_limited' = 'unavailable';
         // Build an address from user profile for Civic API lookup
         const address = [
             userContext?.user?.constituency,
@@ -37,6 +44,7 @@ export const handleChat = async (
         if (address && address !== 'India') {
             try {
                 const civicResult = await fetchRepresentativesByAddress(address);
+                providerStatus = civicResult.status === 'misconfigured' || civicResult.status === 'rate_limited' ? civicResult.status : 'unavailable';
 
                 if (civicResult.source === 'google_civic_api' && civicResult.representatives.length > 0) {
                     const reps = civicResult.representatives.slice(0, 3); // show top 3
@@ -45,7 +53,7 @@ export const handleChat = async (
                             <p class="font-bold text-sm">${DOMPurify.sanitize(rep.name)}</p>
                             ${rep.office ? `<p class="text-xs text-[#4285f4] font-bold uppercase tracking-widest">${DOMPurify.sanitize(rep.office)}</p>` : ''}
                             ${rep.party ? `<p class="text-xs opacity-70">${DOMPurify.sanitize(rep.party)}</p>` : ''}
-                            ${rep.phones?.length ? `<p class="text-xs mt-1">📞 ${DOMPurify.sanitize(rep.phones[0])}</p>` : ''}
+                            ${rep.phones?.length ? `<p class="text-xs mt-1">Phone: ${DOMPurify.sanitize(rep.phones[0])}</p>` : ''}
                             ${rep.urls?.length ? `<a href="${DOMPurify.sanitize(rep.urls[0])}" target="_blank" class="text-xs text-[#FF9933] underline font-bold">Official Website →</a>` : ''}
                         </div>
                     `).join('');
@@ -76,7 +84,7 @@ export const handleChat = async (
             `;
             return { agentHtml: html, newHistory: history };
         } else {
-            return { agentHtml: generateRepInsightsHtml(), newHistory: history };
+            return { agentHtml: generateRepInsightsHtml(providerStatus), newHistory: history };
         }
     }
 
@@ -113,8 +121,38 @@ export const handleChat = async (
             if (coords.length === 2) {
                 const lat = parseFloat(coords[0]);
                 const lng = parseFloat(coords[1]);
+                if (!Number.isFinite(lat) || !Number.isFinite(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+                    return { agentHtml: '<div class="space-y-3" role="alert"><p class="font-bold">Location data is invalid.</p><p class="text-sm">Please retry location sharing or use your saved constituency in Settings.</p></div>', newHistory: history };
+                }
                 const mapsKey = process.env.GOOGLE_MAPS_API_KEY;
                 const searchQuery = encodeURIComponent('polling booth near me');
+
+                const profileAddress = [
+                    userContext?.user?.constituency,
+                    userContext?.user?.state,
+                    'India',
+                ].filter(Boolean).join(', ');
+                let locationHtml = '';
+                if (profileAddress && profileAddress !== 'India') {
+                    try {
+                        const civicResult = await fetchPollingLocationsByAddress(profileAddress);
+                        if (civicResult.pollingLocations?.length) {
+                            locationHtml = `
+                                <div class="space-y-2">
+                                    <p class="text-xs font-bold uppercase tracking-widest">Polling locations for ${DOMPurify.sanitize(profileAddress)}</p>
+                                    ${civicResult.pollingLocations.map((location) => `
+                                        <div class="p-3 bg-white border-2 border-[#1A1A1A] shadow-[2px_2px_0px_#1A1A1A]">
+                                            <p class="font-bold text-sm">${DOMPurify.sanitize(location.name)}</p>
+                                            <p class="text-xs">${DOMPurify.sanitize(location.address || 'Address not available')}</p>
+                                        </div>
+                                    `).join('')}
+                                </div>
+                            `;
+                        }
+                    } catch (_e) {
+                        // GPS map fallback remains available when the Civic API is unavailable.
+                    }
+                }
 
                 // Build rich response with Google Maps embed if key available
                 let mapsHtml = '';
@@ -138,8 +176,9 @@ export const handleChat = async (
                 const directionsUrl = `https://www.google.com/maps/search/polling+booth/@${lat},${lng},14z`;
                 const html = `
                     <div class="space-y-3">
-                        <p class="text-xs bg-[#34a853] text-white px-2 py-1 inline-block uppercase font-bold tracking-widest shadow-[2px_2px_0px_#1A1A1A]">📍 Google Maps · Location Acquired</p>
+                        <p class="text-xs bg-[#34a853] text-white px-2 py-1 inline-block uppercase font-bold tracking-widest shadow-[2px_2px_0px_#1A1A1A]">Google Maps · Location Acquired</p>
                         <p>Your coordinates: <strong>${lat.toFixed(5)}, ${lng.toFixed(5)}</strong></p>
+                        ${locationHtml}
                         ${mapsHtml}
                         <a href="${directionsUrl}" target="_blank" rel="noopener noreferrer"
                            class="inline-block mt-2 px-4 py-2 bg-[#4285f4] text-white border-2 border-[#1A1A1A] font-bold text-xs uppercase tracking-widest shadow-[2px_2px_0px_#1A1A1A] hover:shadow-none hover:translate-y-[2px] transition-all">
@@ -159,7 +198,7 @@ export const handleChat = async (
 
         const contents = [...cleanHistory, { role: 'user', parts: [{ text: message }] }];
 
-        const response = await (ai.models as any).generateContent({
+        const generateContent = (model: GeminiModel) => (model as any).models.generateContent({
             model: 'gemini-2.5-flash',
             contents: contents,
             config: {
@@ -171,6 +210,19 @@ export const handleChat = async (
                 { google_search: {} }
             ]
         });
+
+        let response;
+        try {
+            response = await generateContent(ai);
+        } catch (error: unknown) {
+            const status = (error as { status?: number })?.status;
+            const messageText = error instanceof Error ? error.message : String(error);
+            if (status !== 401 && status !== 403 && !/unauthorized|forbidden|api key/i.test(messageText)) throw error;
+            resetGeminiModel();
+            const retryAi = getGeminiModel(apiKey);
+            if (retryAi === 'MOCK_MODE') throw error;
+            response = await generateContent(retryAi);
+        }
 
         responseText = response.text || "I encountered an issue generating a response.";
 

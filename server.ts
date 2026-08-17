@@ -1,7 +1,7 @@
 import crypto from 'crypto';
 import dotenv from 'dotenv';
 import path from 'path';
-import multer from 'multer';
+import { randomBytes } from 'crypto';
 import cookieParser from 'cookie-parser';
 import pino from 'pino';
 import session from 'express-session';
@@ -15,30 +15,35 @@ import DOMPurify from 'isomorphic-dompurify';
 import cors from 'cors';
 import compression from 'compression';
 import express from 'express';
+import { Writable } from 'stream';
 
 import { handleChat } from './src/chatHandler.js';
-import { generateErrorHtml, generateAdminLogsHtml } from './src/uiTemplates.js';
+import { generateErrorHtml } from './src/uiTemplates.js';
 import { validateEnv } from './src/utils/validateEnv.js';
 import { createApiRouter } from './src/routes/api.js';
 import { initFirebase } from './src/firebaseAdmin.js';
 import { fetchRepresentativesByAddress } from './src/civicApiService.js';
 import { PersistenceManager } from './src/persistence.js';
+import { runMigrations, seedElectionData } from './src/database.js';
+import { z } from 'zod';
 
-import { ChatHistoryItem, User } from './src/types.js';
+import { User } from './src/types.js';
 
 dotenv.config();
-validateEnv();
 
-const app = express();
+export const app = express();
 const port = process.env.PORT || 8080;
 
 // --- Database Setup ---
 const dbPath = process.env.DB_PATH || './data/civicflow.db';
-const dbDir = path.dirname(dbPath);
-if (!fs.existsSync(dbDir)) {
-    fs.mkdirSync(dbDir, { recursive: true });
+if (process.env.NODE_ENV === 'production' && dbPath !== ':memory:' && !path.isAbsolute(dbPath)) {
+    throw new Error('DB_PATH must be an absolute path in production.');
 }
+const dbDir = dbPath === ':memory:' ? null : path.dirname(path.resolve(dbPath));
+if (dbDir) fs.mkdirSync(dbDir, { recursive: true });
 const db = new Database(dbPath);
+const sessionDir = path.resolve(process.env.SESSION_DIR || './data');
+fs.mkdirSync(sessionDir, { recursive: true });
 
 // Initialize DB schema
 db.exec(`
@@ -86,27 +91,51 @@ db.exec(`
         incumbent INTEGER DEFAULT 0,
         FOREIGN KEY (constituency_id) REFERENCES constituencies(id)
     );
+
+    CREATE TABLE IF NOT EXISTS notifications (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        message TEXT NOT NULL,
+        is_read INTEGER DEFAULT 0,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id)
+    );
 `);
+runMigrations(db);
 
 // --- Logger Setup ---
-const logger = pino({
-    level: process.env.LOG_LEVEL || 'info',
-    transport: process.env.NODE_ENV !== 'production' ? {
-        target: 'pino-pretty',
-        options: { colorize: true }
-    } : undefined
+const recentLogs: Array<{ time: number; level: number; msg?: string; err?: { message?: string } }> = [];
+const logStream = new Writable({
+    write(chunk, _encoding, callback) {
+        try {
+            const record = JSON.parse(chunk.toString()) as { time?: number; level?: number; msg?: string; err?: { message?: string } };
+            recentLogs.unshift({
+                time: Number(record.time || Date.now()),
+                level: Number(record.level || 30),
+                msg: record.msg,
+                err: record.err ? { message: String(record.err.message || 'Provider or server error') } : undefined,
+            });
+            recentLogs.splice(50);
+        } catch {
+            // Ignore malformed sink entries; application logging must never break a request.
+        }
+        callback();
+    },
 });
+const logger = pino({ level: process.env.LOG_LEVEL || 'info' }, logStream);
+validateEnv(logger);
 
 // --- Middleware ---
 app.use(compression());
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: '32kb' }));
+app.use(express.urlencoded({ extended: true, limit: '32kb' }));
 app.use(cookieParser());
 
 const SQLiteStore = connectSqlite3(session);
+const sessionStore = new SQLiteStore({ dir: sessionDir, db: process.env.SESSION_DB || 'sessions.db' }) as any;
 app.use(session({
-    store: new SQLiteStore({ dir: './data', db: 'sessions.db' }) as any,
-    secret: process.env.SESSION_SECRET || 'civic-flow-secret-123',
+    store: sessionStore,
+    secret: process.env.SESSION_SECRET || randomBytes(32).toString('hex'),
     resave: false,
     saveUninitialized: false,
     cookie: {
@@ -116,8 +145,6 @@ app.use(session({
         sameSite: 'lax'
     }
 }));
-
-const upload = multer();
 
 // --- Security Middleware ---
 app.use(helmet({
@@ -159,13 +186,30 @@ app.set('trust proxy', 1);
 const firestoreDb = initFirebase();
 
 // --- Routes ---
+const electionData = JSON.parse(fs.readFileSync(path.resolve('data/elections.json'), 'utf-8')) as Record<string, unknown>;
+seedElectionData(db, electionData);
+
+app.use('/api', (req, res, next) => {
+    if (['GET', 'HEAD', 'OPTIONS'].includes(req.method) || req.path === '/csrf' || req.path === '/health') return next();
+    const sess = req.session as any;
+    const token = req.get('CSRF-Token');
+    if (!sess.csrfToken || token !== sess.csrfToken) return res.status(403).json({ success: false, message: 'Invalid CSRF token' });
+    next();
+});
+
+app.get('/api/csrf', (req, res) => {
+    const sess = req.session as any;
+    sess.csrfToken ||= randomBytes(32).toString('hex');
+    res.json({ csrfToken: sess.csrfToken });
+});
+
 const chatLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
     max: 100,
     message: generateErrorHtml("Too many requests from this IP, please try again after 15 minutes.")
 });
 
-app.use('/api', createApiRouter(db, logger, upload, chatLimiter, null, firestoreDb));
+app.use('/api', createApiRouter(db, logger, chatLimiter, electionData, firestoreDb, () => recentLogs));
 
 // Health check
 app.get('/api/health', (req, res) => {
@@ -179,39 +223,76 @@ app.get('/api/health', (req, res) => {
 });
 
 // Auth Routes
-app.post('/api/login', async (req, res) => {
-    const { email, password } = req.body;
-    if (!email || !password) {
-        return res.status(400).json({ success: false, message: "Missing credentials" });
-    }
+const credentialsSchema = z.object({
+    email: z.string().trim().email(),
+    password: z.string().min(8),
+});
+const profileSchema = z.object({
+    epic_number: z.string().trim().max(32).optional().default(''),
+    state: z.string().trim().max(100).optional().default(''),
+    constituency: z.string().trim().max(150).optional().default(''),
+    language: z.enum(['en', 'hi']).default('en'),
+});
+const adminEmails = new Set((process.env.ADMIN_EMAILS || process.env.ADMIN_EMAIL || '').split(',').map((email) => email.trim().toLowerCase()).filter(Boolean));
+const authLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 20,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { success: false, message: 'Too many authentication attempts. Try again later.' },
+});
 
+const startSession = (req: express.Request, user: User) => {
+    const sess = req.session as any;
+    sess.userId = user.id;
+    sess.email = user.email;
+    sess.role = user.role;
+};
+
+app.post('/api/register', authLimiter, async (req, res) => {
+    const parsed = credentialsSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ success: false, message: 'Enter a valid email and a password of at least 8 characters.' });
+    const { email, password } = parsed.data;
     try {
-        let user = db.prepare("SELECT * FROM users WHERE email = ?").get(email) as User | undefined;
-        
-        if (!user) {
-            const hash = await bcrypt.hash(password, 10);
-            const role = email === 'admin@example.com' ? 'admin' : 'voter';
-            const result = db.prepare("INSERT INTO users (email, password_hash, role) VALUES (?, ?, ?)").run(email, hash, role);
-            user = db.prepare("SELECT * FROM users WHERE id = ?").get(result.lastInsertRowid) as User;
-        } else {
-            const match = await bcrypt.compare(password, user.password_hash);
-            if (!match) return res.status(401).json({ success: false, message: "Invalid credentials" });
+        if (db.prepare('SELECT id FROM users WHERE email = ?').get(email)) {
+            return res.status(409).json({ success: false, message: 'An account with this email already exists.' });
         }
-
-        const sess = req.session as any;
-        sess.userId = user.id;
-        sess.email = user.email;
-        sess.role = user.role;
-
+        const hash = await bcrypt.hash(password, 10);
+        const role = adminEmails.has(email.toLowerCase()) ? 'admin' : 'voter';
+        const result = db.prepare('INSERT INTO users (email, password_hash, role) VALUES (?, ?, ?)').run(email, hash, role);
+        db.prepare('INSERT INTO notifications (user_id, message) VALUES (?, ?)').run(result.lastInsertRowid, 'Welcome to CivicFlow. Complete your profile to personalize civic lookups.');
+        const user = db.prepare('SELECT * FROM users WHERE id = ?').get(result.lastInsertRowid) as User;
+        startSession(req, user);
         res.json({ success: true, email: user.email, role: user.role, credits: user.prompt_credits });
     } catch (err) {
-        logger.error({ err }, "Login error");
+        logger.error({ err }, 'Registration error');
+        res.status(500).json({ success: false });
+    }
+});
+
+app.post('/api/login', authLimiter, async (req, res) => {
+    const parsed = credentialsSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ success: false, message: 'Enter a valid email and password.' });
+    try {
+        const user = db.prepare('SELECT * FROM users WHERE email = ?').get(parsed.data.email) as User | undefined;
+        if (!user || !(await bcrypt.compare(parsed.data.password, user.password_hash))) {
+            return res.status(401).json({ success: false, message: 'Invalid credentials' });
+        }
+        startSession(req, user);
+        res.json({ success: true, email: user.email, role: user.role, credits: user.prompt_credits });
+    } catch (err) {
+        logger.error({ err }, 'Login error');
         res.status(500).json({ success: false });
     }
 });
 
 app.post('/api/logout', (req, res) => {
-    req.session.destroy(() => {
+    req.session.destroy((error) => {
+        if (error) {
+            logger.error({ err: error }, 'Logout failed');
+            return res.status(500).json({ success: false, message: 'Logout failed. Please try again.' });
+        }
+        res.clearCookie('connect.sid');
         res.json({ success: true });
     });
 });
@@ -241,7 +322,13 @@ app.post('/api/profile', async (req, res) => {
     const sess = req.session as any;
     if (!sess.userId) return res.status(401).json({ success: false });
 
-    const { epic_number, state, constituency, language } = req.body;
+    const parsed = profileSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ success: false, message: 'Invalid profile details.' });
+    const { epic_number, state, constituency, language } = parsed.data;
+    if (state && constituency) {
+        const matchingConstituency = db.prepare('SELECT id FROM constituencies WHERE name = ? AND state = ?').get(constituency, state);
+        if (!matchingConstituency) return res.status(400).json({ success: false, message: 'State and constituency do not match a known local record.' });
+    }
     try {
         db.prepare("UPDATE users SET epic_number = ?, state = ?, constituency = ?, language_preference = ? WHERE id = ?")
           .run(epic_number, state, constituency, language, sess.userId);
@@ -251,31 +338,19 @@ app.post('/api/profile', async (req, res) => {
     }
 });
 
-// CSRF Placeholder
-app.get('/api/csrf', (req, res) => {
-    const token = crypto.randomBytes(32).toString('hex');
-    res.json({ csrfToken: token });
-});
-
-// Admin Logs
-app.get('/api/admin/logs', (req, res) => {
-    const sess = req.session as any;
-    if (sess.role !== 'admin') return res.status(403).send(generateErrorHtml("Access Denied"));
-    
-    // In a real app, we'd read from a log file or DB. For this demo, we return mock/recent logs.
-    const mockLogs = [
-        { time: Date.now(), level: 30, msg: "System initialized" },
-        { time: Date.now() - 5000, level: 30, msg: "New user registered" },
-        { time: Date.now() - 10000, level: 50, msg: "Failed Civic API call", err: { message: "Timeout" } }
-    ];
-    
-    const isPartial = req.query.partial === 'true';
-    res.send(generateAdminLogsHtml(mockLogs, isPartial));
-});
-
 // Static files
 app.use(express.static('public'));
 
-app.listen(port, () => {
-    logger.info(`CivicFlow Server running at http://localhost:${port}`);
-});
+export function startServer() {
+    return app.listen(port, () => {
+        logger.info(`CivicFlow Server running at http://localhost:${port}`);
+    });
+}
+
+export function stopServer(): void {
+    if (typeof sessionStore.db?.close === 'function') sessionStore.db.close();
+    if (!db.open) return;
+    db.close();
+}
+
+if (process.env.NODE_ENV !== 'test') startServer();

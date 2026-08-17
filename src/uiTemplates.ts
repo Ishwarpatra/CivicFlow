@@ -1,4 +1,5 @@
-import DOMPurify from "isomorphic-dompurify";
+import DOMPurify from 'isomorphic-dompurify';
+import { getElectionDataStatus } from './database.js';
 
 const buildChatBubble = (iconContent: string, iconBg: string, bubbleBg: string, bubbleBorder: string, bubbleShadow: string, textStyle: string, message: string, customClasses: string = "", extraAttrs: string = "") => `
     <div x-data="{ show: false }" x-init="setTimeout(() => show = true, 50)" :class="show ? 'chat-bubble-entered' : 'chat-bubble-enter'" class="spring-m3 flex gap-4 ${customClasses}">
@@ -25,46 +26,81 @@ export const generateSequoiaPitchHtml = () => `
     </div>
 `;
 
-export const generateRepInsightsHtml = () => `
-    <div class="space-y-6">
-        <div class="p-4 bg-white border-2 border-[#1A1A1A] shadow-[4px_4px_0px_#1A1A1A] relative overflow-hidden group">
-            <div class="absolute top-0 right-0 py-1 px-8 bg-[#ea4335] text-white text-[10px] font-bold tracking-widest transform rotate-45 translate-x-6 translate-y-2 border-y-2 border-[#1A1A1A]">STATIC DEMO</div>
-            <h3 class="text-xl font-bold uppercase tracking-widest text-[#1A1A1A] mb-1">Hon. Prashant Kishore</h3>
-            <p class="text-xs uppercase opacity-90 mb-4 bg-[#FF9933] text-white inline-block px-2 py-0.5 font-bold border border-[#1A1A1A]">South Chennai District</p>
-            
-            <div class="grid grid-cols-2 gap-4 mb-4">
-                <div class="bg-[#F8F7F3] p-3 border border-[#1A1A1A]">
-                    <p class="text-xs uppercase font-bold text-[#4285f4]">Attendance</p>
-                    <p class="text-2xl font-black">88%</p>
-                </div>
-                <div class="bg-[#F8F7F3] p-3 border border-[#1A1A1A]">
-                    <p class="text-xs uppercase font-bold text-[#ea4335]">Criminal Records</p>
-                    <p class="text-2xl font-black">0</p>
-                </div>
-            </div>
-
-            <div class="mb-6 space-y-2">
-                <div class="flex justify-between items-end">
-                    <p class="text-xs font-bold uppercase text-[#1A1A1A]">CivicTrust Score</p>
-                    <p class="text-sm font-black text-[#34a853]">A+</p>
-                </div>
-                <div class="w-full h-3 border-2 border-[#1A1A1A] p-0.5 bg-white overflow-hidden relative">
-                    <div class="h-full w-[92%] bg-[#34a853] absolute left-0 top-0 bottom-0 origin-left scale-x-0 animate-[scale-line_1s_ease-out_forwards]"></div>
-                </div>
-                <p class="text-xs opacity-70">Sourced from PRS India & MyNeta</p>
-            </div>
-            
-            <div class="mt-4 flex justify-between items-center bg-[#F0F0F0] p-2 border-2 border-[#1A1A1A] shadow-[2px_2px_0px_#1A1A1A]">
-                <p class="text-xs font-bold uppercase pl-2 flex-1">Mark as Voted?</p>
-                <form hx-post="/api/vote" hx-swap="outerHTML">
-                    <button type="submit" aria-label="Cast your vote now" class="bg-white text-[#1A1A1A] hover:bg-[#FF9933] hover:text-white px-3 py-2 border-2 border-[#1A1A1A] font-bold text-xs uppercase tracking-widest relative transition-colors flex items-center gap-2 group cursor-pointer shadow-[2px_2px_0px_#1A1A1A] active:translate-y-[2px] active:shadow-none">
-                        <span>VOTE NOW</span>
-                    </button>
-                </form>
-            </div>
-        </div>
+export const generateRepInsightsHtml = (status: 'unavailable' | 'misconfigured' | 'rate_limited' = 'unavailable') => {
+    const message = status === 'misconfigured'
+        ? 'Live representative lookup is not configured on this installation.'
+        : status === 'rate_limited'
+            ? 'The live representative provider is temporarily rate-limited. Please try again later.'
+            : 'We could not retrieve a live representative record.';
+    return `
+    <div class="space-y-3" role="status">
+        <p class="text-xs bg-[#FF9933] text-black px-2 py-1 inline-block uppercase font-bold tracking-widest shadow-[2px_2px_0px_#1A1A1A]">Representative lookup</p>
+        <p>${message} Please update your India-scoped state and constituency in Settings, then retry.</p>
+        <a href="https://electoralsearch.eci.gov.in/" target="_blank" rel="noopener noreferrer" class="text-[#FF9933] underline font-bold text-sm">Use official ECI electoral search →</a>
     </div>
 `;
+};
+
+export const generateElectionResultsHtml = (electionData: Record<string, unknown> | null | undefined) => {
+    const status = getElectionDataStatus((electionData || {}) as { valid_until?: string });
+    if (status === 'stale') return `
+        <div class="space-y-3">
+            <p class="text-xs bg-[#ea4335] text-white px-2 py-1 inline-block uppercase font-bold tracking-widest shadow-[2px_2px_0px_#1A1A1A]">Stale election data</p>
+            <p>The local results dataset is no longer current, so CivicFlow will not present it as live election information.</p>
+            <p class="text-xs opacity-70">Dataset: ${DOMPurify.sanitize(String(electionData?.election || 'Unknown election'))} · Retrieved: ${DOMPurify.sanitize(String(electionData?.retrieved_at || 'unknown'))}</p>
+            <a href="https://results.eci.gov.in/" target="_blank" rel="noopener noreferrer" class="text-[#FF9933] font-bold underline">Open official Election Commission results →</a>
+        </div>
+    `;
+
+    const states = Array.isArray(electionData?.states) ? electionData.states : [];
+    const rows = states.flatMap((state) => {
+        if (!state || typeof state !== 'object') return [];
+        const stateRecord = state as { name?: unknown; constituencies?: unknown };
+        const constituencies = Array.isArray(stateRecord.constituencies) ? stateRecord.constituencies : [];
+        return constituencies.flatMap((constituency) => {
+            if (!constituency || typeof constituency !== 'object') return [];
+            const item = constituency as { name?: unknown; winner?: unknown; runnerUp?: unknown; turnout_pct?: unknown };
+            const winner = item.winner && typeof item.winner === 'object' ? item.winner as { name?: unknown; party?: unknown; votes?: unknown } : {};
+            const runnerUp = item.runnerUp && typeof item.runnerUp === 'object' ? item.runnerUp as { name?: unknown; party?: unknown; votes?: unknown } : {};
+            return [{
+                state: String(stateRecord.name || ''),
+                constituency: String(item.name || ''),
+                winner: String(winner.name || 'Not available'),
+                winnerParty: String(winner.party || ''),
+                winnerVotes: Number(winner.votes || 0).toLocaleString('en-IN'),
+                runnerUp: String(runnerUp.name || 'Not available'),
+                runnerUpParty: String(runnerUp.party || ''),
+                turnout: String(item.turnout_pct ?? 'N/A'),
+            }];
+        });
+    });
+
+    if (!rows.length) return `
+        <div class="space-y-3">
+            <p class="text-xs bg-[#FF9933] text-black px-2 py-1 inline-block uppercase font-bold tracking-widest shadow-[2px_2px_0px_#1A1A1A]">Election results</p>
+            <p>Results are not available for the requested election in this installation.</p>
+        </div>
+    `;
+
+    const safe = (value: string) => DOMPurify.sanitize(value, { ALLOWED_TAGS: [] });
+    return `
+        <div class="space-y-4">
+            <p class="text-xs bg-[#4285f4] text-white px-2 py-1 inline-block uppercase font-bold tracking-widest shadow-[2px_2px_0px_#1A1A1A]">${safe(String(electionData?.election || 'Election results'))}</p>
+            <p class="text-sm">Showing the locally available ${status === 'undated' ? 'undated' : 'dated'} results dataset. It covers ${rows.length} constituencies.</p>
+            <div class="space-y-3">
+                ${rows.map((row) => `
+                    <div class="p-3 bg-white border-2 border-[#1A1A1A] shadow-[2px_2px_0px_#1A1A1A]">
+                        <p class="font-bold">${safe(row.constituency)} <span class="font-normal opacity-60">· ${safe(row.state)}</span></p>
+                        <p class="text-xs mt-2"><strong>Winner:</strong> ${safe(row.winner)}${row.winnerParty ? ` (${safe(row.winnerParty)})` : ''} · ${safe(row.winnerVotes)} votes</p>
+                        <p class="text-xs"><strong>Runner-up:</strong> ${safe(row.runnerUp)}${row.runnerUpParty ? ` (${safe(row.runnerUpParty)})` : ''}</p>
+                        <p class="text-xs opacity-70 mt-1">Turnout: ${safe(row.turnout)}%</p>
+                    </div>
+                `).join('')}
+            </div>
+            <p class="text-[10px] opacity-50">Source: ${safe(String(electionData?.source || 'Local election dataset'))}</p>
+        </div>
+    `;
+};
 
 export const generateOfflineEligibilityHtml = () => `
     <div class="space-y-3">
@@ -114,10 +150,11 @@ export const generateErrorHtml = (errorDetails: string) => {
     return buildChatBubble('ERR', 'bg-[#ea4335]', 'bg-[#F8F7F3]', 'border-[#ea4335]', 'shadow-[4px_4px_0px_#ea4335]', 'text-[#ea4335] flex flex-col gap-2', `<p class="font-bold uppercase tracking-widest text-xs mb-2 text-[#1A1A1A]">System Error</p><p>${safeError}</p>`, 'mb-6 relative');
 };
 
-export const generateVoteSuccessHtml = () => `<button disabled class="m3-button-voted">VOTED</button>`;
-export const generateAlreadyVotedHtml = () => `<button disabled class="m3-button-voted">ALREADY VOTED</button>`;
-export const generateVoteErrorHtml = () => `<button disabled class="m3-button-error">Error recording vote</button>`;
-export const generateLoginToVoteHtml = () => `<button disabled class="m3-button-disabled">Log in to vote</button>`;
+export const generateVoteSuccessHtml = () => `<div class="p-3 border-2 border-[#34a853] bg-[#F8F7F3]" role="status"><p class="font-bold text-[#34a853]">Vote recorded locally</p><p class="text-xs mt-1">View your vote status from your account.</p><a href="#vote-status" class="text-xs text-[#FF9933] underline font-bold">View vote status →</a></div>`;
+export const generateVotePendingHtml = () => `<div class="p-3 border-2 border-[#FF9933] bg-[#F8F7F3]" role="status"><p class="font-bold text-[#FF9933]">Vote saved; cloud sync pending</p><p class="text-xs mt-1">Your local record is safe and will be retried by the service.</p><a href="#vote-status" class="text-xs text-[#FF9933] underline font-bold">Check sync status →</a></div>`;
+export const generateAlreadyVotedHtml = () => `<div class="p-3 border-2 border-[#4285f4] bg-[#F8F7F3]" role="status"><p class="font-bold text-[#4285f4]">Already recorded</p><p class="text-xs mt-1">You already have a vote for this election.</p><a href="#vote-status" class="text-xs text-[#FF9933] underline font-bold">View vote status →</a></div>`;
+export const generateVoteErrorHtml = () => `<div class="p-3 border-2 border-[#ea4335] bg-[#F8F7F3]" role="alert"><p class="font-bold text-[#ea4335]">Vote could not be recorded</p><button hx-post="/api/vote" hx-swap="outerHTML" class="text-xs text-[#FF9933] underline font-bold mt-1">Retry →</button></div>`;
+export const generateLoginToVoteHtml = () => `<div class="p-3 border-2 border-[#1A1A1A] bg-[#F8F7F3]" role="status"><p class="font-bold">Sign in to record a vote</p><p class="text-xs mt-1">Create an account or sign in before continuing.</p><button @click="document.querySelector('[data-auth-open]')?.click()" class="text-xs text-[#FF9933] underline font-bold mt-1">Sign in / Create account →</button></div>`;
 export const generateCreditUpdateScript = (amount: number) => `<script>document.dispatchEvent(new CustomEvent('update-credits', { detail: ${amount} }));</script>`;
 
 export interface LogEntry {
@@ -147,7 +184,7 @@ export function generateAdminLogsHtml(logs: LogEntry[], isPartial: boolean): str
         <div class="h-full flex flex-col bg-white border-2 border-black shadow-[4px_4px_0px_black]">
             <div class="bg-black text-white p-3 flex justify-between items-center">
                 <h2 class="font-bold uppercase tracking-widest text-sm">System Logs</h2>
-                <button class="w-8 h-8 border-2 border-white hover:bg-white hover:text-black" @click="showAdminLogs = false">✕</button>
+                <button class="w-8 h-8 border-2 border-white hover:bg-white hover:text-black" @click="showAdminLogs = false">Close</button>
             </div>
             <div class="overflow-y-auto p-4 flex-1">
                 <table class="w-full text-left">

@@ -29,10 +29,10 @@ Browser (HTMX + Alpine.js)
 Express.js Server (TypeScript)
         │
         ├── Gemini 2.5 Flash API      — AI conversation engine
-        ├── Google Civic Info API     — Real representative + polling data
+        ├── Google Civic Info API     — Optional India-scoped representative + polling lookup
         ├── Google Maps Embed API     — Polling booth map rendering
-        ├── Firebase Firestore        — Persistent vote storage (survives restarts)
-        └── SQLite (better-sqlite3)   — Local user sessions + chat history
+        ├── Firebase Firestore        — Optional cloud vote synchronization
+        └── SQLite (better-sqlite3)   — Local users, sessions, chat history, and sync queue
 ```
 
 ---
@@ -42,7 +42,7 @@ Express.js Server (TypeScript)
 CivicFlow is built on the principle of **"Single Point of Truth"** unification. 
 
 1.  **Guided Navigation**: Instead of presenting a menu of 50 links, the system uses a **Guided Chat Flow**. It proactively asks for the user's State and Constituency only when needed for specific actions (like finding a representative), storing these in the session for future context.
-2.  **Hybrid Persistence**: To solve the ephemeral nature of Cloud Run, we use a **Dual-Write Strategy**. High-value data (Votes) are written to **Firebase Firestore** for long-term persistence, while transient data (Chat History, Credits) are kept in **SQLite** for high-speed local access.
+2.  **Hybrid Persistence**: Votes are written to SQLite first and synchronized to Firestore when configured. A local sync queue records pending cloud synchronization instead of reporting a failed cloud write as fully synchronized. Chat history, credits, users, and sessions remain in SQLite.
 3.  **Graceful Degeneracy**: If the Gemini AI is unavailable (503), the system automatically detects this and injects a **"Static Intelligence"** layer that provides official ECI links based on the user's current context.
 4.  **Security-First HTMX**: We use HTMX for a "Hypermedia" approach, which allows us to keep all business logic and state (including Auth and Session) on the server, significantly reducing the attack surface compared to a thick-client SPA.
 
@@ -53,22 +53,22 @@ CivicFlow is built on the principle of **"Single Point of Truth"** unification.
 | Service | Purpose | Integration Details |
 |---|---|---|---|
 | **Gemini 2.5 Flash** | Conversational AI civic navigator | Uses `system_instruction` for civic context and `google_search` tool for real-time verification. |
-| **Google Civic Information API** | Real representatives data by address | Direct integration via `civicinfo.googleapis.com` to fetch verified ECI representative data. |
+| **Google Civic Information API** | Optional India-scoped representative and polling lookup | Direct integration via `civicinfo.googleapis.com`; provider status is surfaced as live, unavailable, rate-limited, or misconfigured. |
 | **Google Maps Embed API** | Polling booth map with user GPS | Dynamic map rendering based on browser geolocation to guide users to their nearest booth. |
-| **Firebase Firestore** | Persistent vote records | Ensures civic engagement data (votes) survives container restarts on Google Cloud Run. |
+| **Firebase Firestore** | Optional vote synchronization | Cloud synchronization is tracked separately; failed cloud writes remain visible as pending local records. |
 | **Google Analytics 4** | Usage telemetry | Tracks user engagement metrics to optimize civic information delivery. |
 
 ---
 
 ## Features
 
-- 🗳️ **Eligibility Check** — AI-guided voter eligibility Q&A (DOB, state, constituency)
-- 📍 **Find My Booth** — Uses browser geolocation + Google Maps to show nearest polling stations
-- 👤 **Know Your Rep** — Fetches real representatives via Google Civic Information API
-- 🌐 **Multi-language** — English + Hindi UI with Gemini responding in selected locale
-- 🔒 **Secure Auth** — bcrypt passwords, CSRF protection, HttpOnly cookies, helmet CSP
-- 📊 **Admin Panel** — Live pino log viewer, HTMX-powered, admin-only
-- 💳 **Prompt Credits** — Gamified civic engagement reward system
+- **Eligibility Check** — AI-guided voter eligibility Q&A (DOB, state, constituency)
+- **Find My Booth** — Uses browser geolocation + Google Maps to show nearest polling stations
+- **Know Your Rep** — Fetches real representatives via Google Civic Information API
+- **Multi-language** — English + Hindi UI with Gemini responding in selected locale
+- **Secure Auth** — bcrypt passwords, CSRF protection, HttpOnly cookies, helmet CSP
+- **Admin Panel** — Live pino log viewer, HTMX-powered, admin-only
+- **Prompt Credits** — Gamified civic engagement reward system
 
 ---
 
@@ -76,17 +76,20 @@ CivicFlow is built on the principle of **"Single Point of Truth"** unification.
 
 ### Prerequisites
 
-- Node.js ≥ 18
+- Node.js 20 LTS (recommended; Node.js ≥ 18 is supported)
+- A native build toolchain for `better-sqlite3`: Python 3, `make`, and a C/C++ compiler
 - Google API keys (see `.env.example`)
 
 ### Setup
 
 ```bash
-git clone https://github.com/your-org/civicflow
+git clone https://github.com/Ishwarpatra/CivicFlow.git
 cd civicflow
 cp .env.example .env
 # Fill in your API keys in .env
-npm install
+npm ci
+npm run lint
+npm test
 npm run build
 npm start
 ```
@@ -103,6 +106,7 @@ npm run dev
 
 ```bash
 npm test
+# For clean-install verification, remove node_modules and repeat: npm ci && npm run lint && npm test
 ```
 
 ### Coverage Report
@@ -117,23 +121,28 @@ npm run coverage
 
 | Variable | Required | Description |
 |---|---|---|
-| `GEMINI_API_KEY` | ✅ Yes | Gemini AI API key from [AI Studio](https://aistudio.google.com) |
-| `SESSION_SECRET` | ✅ Yes | Random string for signing session cookies |
+| `GEMINI_API_KEY` | Required | Gemini AI API key from [AI Studio](https://aistudio.google.com) |
+| `SESSION_SECRET` | Required | Random string for signing session cookies |
 | `GOOGLE_MAPS_API_KEY` | Recommended | Enables real map embeds in Find My Booth |
 | `GOOGLE_CIVIC_API_KEY` | Recommended | Enables real representative data |
 | `FIREBASE_PROJECT_ID` | Recommended | Firebase project ID |
 | `FIREBASE_CLIENT_EMAIL` | Recommended | Firebase service account email |
 | `FIREBASE_PRIVATE_KEY` | Recommended | Firebase private key (with `\n` escaped) |
 | `ALLOWED_ORIGINS` | Production | Comma-separated CORS-allowed origins |
+| `ADMIN_EMAILS` | Recommended | Comma-separated allowlist of pre-approved admin email addresses |
+| `GOOGLE_CIVIC_ELECTION_ID` | Recommended | Election ID used by the optional Civic polling lookup |
+| `DB_PATH` | Recommended | Absolute persistent SQLite path in production |
+| `SESSION_DIR` | Recommended | Absolute persistent directory for the SQLite session store |
+| `SESSION_DB` | Optional | Session database filename within `SESSION_DIR` |
 
 ---
 
 ## Data Sources
 
-- **Election Commission of India** — Constituency and candidate data (`data/elections.json`)
-- **Google Civic Information API** — Live representative data (`civicinfo.googleapis.com`)
+- **Election Commission of India** — Local constituency and candidate data (`data/elections.json`), with explicit freshness metadata. Expired records are shown as stale and are not presented as current.
+- **Google Civic Information API** — Optional India-scoped representative and polling lookup (`civicinfo.googleapis.com`); provider state is classified as live, unavailable, rate-limited, or misconfigured. It is not treated as the canonical election-results source.
+- **Election Commission of India official portals** — Canonical escalation path for current results, voter registration, and polling-place confirmation when local or provider data is stale or unavailable.
 - **Google Maps** — Polling booth geolocation
-- **PRS India / MyNeta** — Legislative attendance data (used in UI demos)
 
 > *"Data sourced from Election Commission of India and Google Civic API"*
 
@@ -143,7 +152,7 @@ npm run coverage
 
 - `helmet()` with strict Content-Security-Policy
 - CSRF protection on all state-changing routes
-- Rate limiting: 15 chat requests/minute per user
+- Rate limiting: 100 chat requests per 15-minute window per IP, plus 20 authentication attempts per 15-minute window
 - `HttpOnly`, `SameSite: lax`, `Secure` (production) session cookies
 - Input validation with `zod`
 - Output sanitization with `isomorphic-dompurify`
@@ -152,17 +161,21 @@ npm run coverage
 
 ## Known Limitations
 
-- Google Civic Information API is optimized for US-based addresses; Indian address lookups may return partial results depending on constituency name formatting
+- The optional Google Civic integration accepts only India-scoped addresses and may return partial results; official Election Commission portals remain the authority for current election information.
 - Firestore integration degrades gracefully to SQLite if `FIREBASE_*` vars are unset
-- Chat history is capped at 10 turns per session to limit memory usage
+- Chat history is capped at 20 messages per session to limit memory usage.
+- The bundled 2024 dataset is historical and intentionally marked stale; live election results require an official, refreshed source.
+- Firestore vote failures are recorded as pending synchronization instead of being reported as fully synchronized.
 
 ---
 
 ## Deployment (Cloud Run)
 
+The included `Dockerfile` performs a locked install, builds `better-sqlite3` with native build tools, prunes development dependencies, copies runtime artifacts, and exposes an HTTP health check. Use persistent absolute `DB_PATH` and `SESSION_DIR` values, or an external shared session store for multi-instance deployments; the default local SQLite session store is not a shared production session backend.
+
 ```bash
-npm run build
-# Deploy dist/ to Cloud Run Firestore ensures votes persist across container restarts
+docker build --pull -t civicflow .
+docker run --rm -p 8080:8080 --env-file .env civicflow
 ```
 
 ---

@@ -21,6 +21,11 @@ vi.mock('../src/civicApiService.js', () => ({
             { name: 'John Doe', office: 'Mayor', party: 'Independent' }
         ],
         normalizedAddress: '123 Test St, India'
+    }),
+    fetchPollingLocationsByAddress: vi.fn().mockResolvedValue({
+        source: 'google_civic_api',
+        representatives: [],
+        pollingLocations: [{ name: 'Test Polling School', address: 'Chennai, Tamil Nadu' }]
     })
 }));
 
@@ -57,6 +62,40 @@ describe('handleChat', () => {
         expect(result.agentHtml).toContain('12.97160');
         expect(result.agentHtml).toContain('77.59460');
         expect(result.agentHtml).toContain('Location Acquired');
+    });
+
+    it('uses profile address to render a named polling location', async () => {
+        const { fetchPollingLocationsByAddress } = await import('../src/civicApiService.js');
+        const userContext = { user: { state: 'Tamil Nadu', constituency: 'Chennai' } };
+        const result = await handleChat(SYSTEM_CONSTANTS.COMMANDS.FIND_BOOTH_LOCATION + '12.9716|77.5946', [], 'en', 'fake-key', userContext as any);
+        expect(fetchPollingLocationsByAddress).toHaveBeenCalledWith('Chennai, Tamil Nadu, India');
+        expect(result.agentHtml).toContain('Test Polling School');
+    });
+
+    it('rejects malformed GPS coordinates', async () => {
+        const result = await handleChat(SYSTEM_CONSTANTS.COMMANDS.FIND_BOOTH_LOCATION + 'not-a-lat|999');
+        expect(result.agentHtml).toContain('Location data is invalid');
+    });
+
+    it('shows a stale-data warning for expired election results', async () => {
+        const result = await handleChat(SYSTEM_CONSTANTS.COMMANDS.ELECTION_RESULTS, [], 'en', undefined, {
+            electionData: { election: 'Old election', retrieved_at: '2024-06-05', valid_until: '2024-12-31', states: [] }
+        } as any);
+        expect(result.agentHtml).toContain('Stale election data');
+        expect(result.agentHtml).toContain('results.eci.gov.in');
+    });
+
+    it('renders only provided election results', async () => {
+        const result = await handleChat(SYSTEM_CONSTANTS.COMMANDS.ELECTION_RESULTS, [], 'en', undefined, {
+            electionData: {
+                election: 'Lok Sabha General Election 2024',
+                source: 'Test source',
+                states: [{ name: 'Test State', constituencies: [{ name: 'Test Seat', winner: { name: 'Test Winner', party: 'Test Party', votes: 1234 }, runnerUp: { name: 'Test Runner', party: 'Other' }, turnout_pct: 61.2 }] }]
+            }
+        } as any);
+        expect(result.agentHtml).toContain('Test Winner');
+        expect(result.agentHtml).toContain('Test Seat');
+        expect(result.agentHtml).not.toContain('Prashant Kishore');
     });
 
     it('routes to offline eligibility in mock mode', async () => {

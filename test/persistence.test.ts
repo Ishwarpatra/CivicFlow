@@ -53,7 +53,7 @@ describe('PersistenceManager', () => {
     it('handles Firestore failure gracefully', async () => {
         mockFirestore.collection().doc().set.mockRejectedValue(new Error('Firestore down'));
         const result = await persistence.recordVote(1, 'test@example.com');
-        expect(result).toBe('success'); // Should still return success if SQLite write worked
+        expect(result).toBe('sync_pending');
         expect(mockLogger.warn).toHaveBeenCalled();
     });
 
