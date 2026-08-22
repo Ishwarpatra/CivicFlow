@@ -140,7 +140,10 @@ npm run coverage
 | `FIREBASE_PROJECT_ID` | Recommended | Firebase project ID |
 | `FIREBASE_CLIENT_EMAIL` | Recommended | Firebase service account email |
 | `FIREBASE_PRIVATE_KEY` | Recommended | Firebase private key (with `\n` escaped) |
-| `ALLOWED_ORIGINS` | Production | Comma-separated CORS-allowed origins |
+| `ALLOWED_ORIGINS` | Production | Comma-separated HTTPS CORS-allowed origins |
+| `NODE_ENV` | Required in production | Set to `production` outside local development |
+| `PORT` | Optional | HTTP port; Docker publishes `8080` by default |
+| `LOG_LEVEL` | Optional | Structured log level; defaults to `info` |
 | `ADMIN_EMAILS` | Recommended | Comma-separated allowlist of pre-approved admin email addresses |
 | `GOOGLE_CIVIC_ELECTION_ID` | Recommended | Election ID used by the optional Civic polling lookup |
 | `DB_PATH` | Recommended | Absolute persistent SQLite path in production |
@@ -182,14 +185,27 @@ npm run coverage
 
 ---
 
-## Deployment (Cloud Run)
+## Docker and Deployment
 
-The included `Dockerfile` performs a locked install, builds `better-sqlite3` with native build tools, prunes development dependencies, copies runtime artifacts, and exposes an HTTP health check. Use persistent absolute `DB_PATH` and `SESSION_DIR` values, or an external shared session store for multi-instance deployments; the default local SQLite session store is not a shared production session backend.
+The production image uses a locked multi-stage Node 20 build, compiles the native SQLite dependency only in the build stage, runs as the non-root `node` user, and exposes `GET /api/health` for health checks. The runtime stores operational SQLite data only in `/var/lib/civicflow`; the image contains the bundled election fixture but not a pre-existing user database or session store.
+
+### Local container workflow
 
 ```bash
-docker build --pull -t civicflow .
-docker run --rm -p 8080:8080 --env-file .env civicflow
+cp .env.example .env
+# Set SESSION_SECRET and any optional provider keys.
+docker compose up --build -d
+curl --fail http://localhost:8080/api/health
+docker compose logs --follow civicflow
 ```
+
+The Compose workflow persists application and session data in the named `civicflow-data` volume. It is designed for one application instance. If deployment requires multiple replicas, replace the SQLite session store with a shared session backend and move the operational database to managed persistent storage first.
+
+Every push and pull request to `main` also builds the Docker image in CI without publishing it, so container-build regressions are detected alongside the lint, build, and test suite.
+
+### Platform deployment requirements
+
+Set `NODE_ENV=production`, a strong `SESSION_SECRET`, absolute durable paths for `DB_PATH` and `SESSION_DIR`, and public HTTPS origins in `ALLOWED_ORIGINS`. Terminate TLS at the platform or reverse proxy, health-check `/api/health`, and keep the mounted data directory in backups. For exact environment, backup, and update commands, see [the Operations Guide](docs/OPERATIONS.md).
 
 ---
 
