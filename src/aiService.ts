@@ -6,6 +6,30 @@ export const resetGeminiModel = (): void => { genAiModels = null; };
 
 export type GeminiModel = GoogleGenAI | "MOCK_MODE";
 
+export type NimMessage = { role: 'system' | 'user' | 'assistant'; content: string };
+
+export const generateNimChatCompletion = async (messages: NimMessage[]): Promise<string> => {
+  const apiKey = process.env.NVIDIA_NIM_API_KEY?.trim();
+  if (!apiKey) throw new Error('NVIDIA_NIM_API_KEY environment variable is required');
+
+  const response = await fetch('https://integrate.api.nvidia.com/v1/chat/completions', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: process.env.NVIDIA_NIM_MODEL?.trim() || 'meta/llama-3.1-8b-instruct',
+      messages,
+      temperature: 0.7,
+      max_tokens: 500,
+      stream: false,
+    }),
+  });
+  if (!response.ok) throw new Error(`NVIDIA NIM request failed with status ${response.status}`);
+  const body = await response.json() as { choices?: Array<{ message?: { content?: string | null } }> };
+  const content = body.choices?.[0]?.message?.content;
+  if (!content) throw new Error('NVIDIA NIM returned no assistant content');
+  return content;
+};
+
 export const getGeminiModel = (userApiKey?: string): GeminiModel => {
   if (genAiModels && !userApiKey) return genAiModels;
 
