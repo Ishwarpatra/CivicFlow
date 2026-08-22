@@ -28,7 +28,7 @@
 - [x] Fix and revalidate priority UI failures, then publish the completed UI audit report; the final public Nairobi context-preview response passed without cross-jurisdiction leakage.
 - [x] Remove the overlapping “Your civic route,” “Civic guide,” and “Saved route” interface elements while retaining their underlying working flows.
 - [x] Add an accessible public footer with a clear link to `https://github.com/Ishwarpatra/CivicFlow`.
-- [ ] Validate the updated desktop and mobile layout, verify the repository link, and release the changes to the public Render service.
+- [x] Validate the updated desktop and mobile layout, verify the repository link, and release the changes to the public Render service.
 - [x] Define and implement server-side civic-topic eligibility checks so unrelated NIM prompts receive a concise redirection without consuming a guide response.
 - [x] Add server-side guide request quotas for anonymous and signed-in users, with documented values and clear client feedback; interpret “limit less if login” as a higher signed-in allowance (6 anonymous and 20 signed-in civic requests per hour by default).
 - [x] Replace the fixed starter-city list with a globally searchable place source or clearly documented broad global dataset, while retaining context-preview truthfulness.
