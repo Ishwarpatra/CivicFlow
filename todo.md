@@ -4,3 +4,4 @@
 - [x] Update user, developer, and deployment documentation for the integrated product.
 - [x] Validate the integrated application and prepare a safe review checkpoint.
 - [x] Review file-level changes, commit them separately, and push to Ishwarpatra/CivicFlow.
+- [ ] Verify GitHub contribution attribution for the pushed CivicFlow commits and correct any repository-controlled mismatch.
