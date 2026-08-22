@@ -17,10 +17,11 @@ import { User, ChatSessionRow, Constituency, Candidate, UserContext, ChatHistory
 
 declare module 'express-session' {
     interface SessionData {
-        userId: number;
-        email: string;
-        role: string;
-        chatHistory: ChatHistoryItem[];
+        userId?: number;
+        email?: string;
+        role?: 'voter' | 'admin';
+        chatHistory?: ChatHistoryItem[];
+        csrfToken?: string;
     }
 }
 import { Database } from 'better-sqlite3';
