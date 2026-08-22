@@ -65,3 +65,9 @@ The live server-rendered homepage is approximately 15.3 KB before subresources. 
 The live page uses no `<img>` elements: its civic visual language is delivered by CSS composition and a small brand mark, so there is no oversized raster-image burden to remediate. No `Lorem ipsum`, “coming soon,” or similar placeholder copy was found in the rendered HTML. The mobile, tablet, and desktop captures show consistent Newsreader/Manrope typography, spacing, and action-button treatment.
 
 The rendered HTML currently emits several official-resource links as `http://` rather than `https://`. They should be upgraded to HTTPS so the public guide never initiates an insecure navigation before an authority’s redirect policy takes effect.
+
+## Remediation and live revalidation
+
+The UI-audit remediation release (Render deployment of commit `208dc77`) reached **Live** status. On the updated public domain, changing the context from Bengaluru to Nairobi now removes the earlier answer and replaces it with an explicit **Context updated** state: “Ask a new question for this civic context. Earlier answers were cleared to avoid mixing jurisdictions.” The selected Nairobi context continues to show **Context preview** and the notice that local source matching is not connected. The final updated-response assertion remains below.
+
+The subsequent Nairobi guide response correctly named Kenyan authorities, but ended with an incorrect reference to “the Indian election data provided earlier.” This is a remaining high-priority cross-jurisdiction wording defect in the NIM model instruction; the response must be constrained to avoid mentioning India, earlier contexts, or unavailable prior data when `civicContext` is `global_preview`.
