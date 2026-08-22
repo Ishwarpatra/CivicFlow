@@ -1,0 +1,22 @@
+services:
+  civicflow:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: civicflow:local
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+      PORT: "8080"
+      DB_PATH: /var/lib/civicflow/civicflow.db
+      SESSION_DIR: /var/lib/civicflow
+      SESSION_DB: sessions.db
+    ports:
+      - "8080:8080"
+    volumes:
+      - civicflow-data:/var/lib/civicflow
+    restart: unless-stopped
+
+volumes:
+  civicflow-data:
