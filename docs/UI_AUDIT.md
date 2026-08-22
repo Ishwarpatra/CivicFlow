@@ -71,3 +71,13 @@ The rendered HTML currently emits several official-resource links as `http://` r
 The UI-audit remediation release (Render deployment of commit `208dc77`) reached **Live** status. On the updated public domain, changing the context from Bengaluru to Nairobi now removes the earlier answer and replaces it with an explicit **Context updated** state: “Ask a new question for this civic context. Earlier answers were cleared to avoid mixing jurisdictions.” The selected Nairobi context continues to show **Context preview** and the notice that local source matching is not connected. The final updated-response assertion remains below.
 
 The subsequent Nairobi guide response correctly named Kenyan authorities, but ended with an incorrect reference to “the Indian election data provided earlier.” This is a remaining high-priority cross-jurisdiction wording defect in the NIM model instruction; the response must be constrained to avoid mentioning India, earlier contexts, or unavailable prior data when `civicContext` is `global_preview`.
+
+The final remediation deployment (Render deployment `dep-da4skcm417fc73ddere0`, commit `d966cb1`) reached **Live** status at 21:42 UTC. The final public Nairobi response revalidation is the remaining release check.
+
+On the final public build, switching from Bengaluru to Nairobi again cleared the earlier answer and rendered the **Context updated** notice before the guide form. The empty guide state was ready for a fresh Nairobi-only request.
+
+The final Nairobi request completed successfully. Its response correctly stated that CivicFlow has no directly connected authority source for Nairobi, offered Kenya-appropriate IEBC and KNBS HTTPS resources, and did not contain Indian ECI, NVSP, Bengaluru, or prior-context wording. The location-change isolation and deterministic global-preview guard therefore passed in the public deployment.
+
+## Audit Outcome
+
+The live domain passed the audited functional, responsive, keyboard, semantic-accessibility, visual-content, and warm-response checks in Chromium. The audit also found and remediated three high-priority issues: retained cross-context answers, global-preview language leakage, and insecure generated HTTP authority links. Remaining follow-ups are environmental rather than confirmed CivicFlow UI failures: real-device Safari and Edge checks, assistive-technology announcement testing, and independent availability validation of third-party authority sites whose certificates could not be verified by the audit environment. The free Render tier also remains unsuitable for a strict under-two-second service-level target because cold starts and warm responses vary.
