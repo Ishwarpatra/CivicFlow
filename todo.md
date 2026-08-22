@@ -36,4 +36,4 @@
 - [x] Create a custom 1280×640 CivicFlow repository social-preview image with clear legibility at social-card scale.
 - [x] Add the social-preview asset and concise setup/reference guidance to the README.
 - [x] Verify the 1280×640 image dimensions, committed repository path, and GitHub-rendered README.
-- [ ] Assign the final PNG in GitHub’s Social preview setting and verify the resulting repository card.
+- [x] Assign the final PNG in GitHub’s Social preview setting and verify the resulting repository card.
