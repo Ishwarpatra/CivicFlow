@@ -10,6 +10,7 @@
 - [x] Modernize Docker assets and verify the containerized production workflow.
 - [x] Run checks and push file-scoped documentation and Docker commits.
 - [x] Compare the remote README and Docker files against the pushed commits and resolve any visible mismatch.
-- [x] Confirm the selected Render host supports CivicFlow’s persistent SQLite data, health checks, and Docker runtime.
-- [x] Add `render.yaml` and the production deployment decision record with durable-path and single-instance guidance.
-- [ ] Obtain explicit approval to create the paid Render web service and attached disk, then release CivicFlow and verify the public health endpoint and primary user journey.
+- [x] Confirm the selected Render host supports CivicFlow’s Docker runtime and health checks; the free demonstration intentionally uses ephemeral filesystem storage.
+- [x] Replace the persistent-service blueprint and deployment record with a free stateless demonstration configuration and explicit reset warning.
+- [x] Commit and remotely verify the revised free-deployment files under the verified GitHub identity.
+- [ ] Create the free Render demonstration service from `main`, then verify its public health endpoint and primary user journey.
