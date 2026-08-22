@@ -1,0 +1,29 @@
+# Render Blueprint for CivicFlow's current single-instance SQLite architecture.
+# A persistent disk requires a paid web-service plan and prevents horizontal scaling.
+services:
+  - type: web
+    runtime: docker
+    name: civicflow
+    branch: main
+    region: oregon
+    plan: starter
+    healthCheckPath: /api/health
+    disk:
+      name: civicflow-data
+      mountPath: /var/lib/civicflow
+      sizeGB: 1
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: "8080"
+      - key: DB_PATH
+        value: /var/lib/civicflow/civicflow.db
+      - key: SESSION_DIR
+        value: /var/lib/civicflow
+      - key: SESSION_DB
+        value: sessions.db
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: LOG_LEVEL
+        value: info
