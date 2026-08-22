@@ -8,4 +8,5 @@
 - [x] Audit README, Docker, environment, and supporting documentation for integration drift.
 - [x] Refresh the README and supporting user-developer guides for current setup and trust boundaries.
 - [x] Modernize Docker assets and verify the containerized production workflow.
-- [ ] Run checks and push file-scoped documentation and Docker commits.
+- [x] Run checks and push file-scoped documentation and Docker commits.
+- [x] Compare the remote README and Docker files against the pushed commits and resolve any visible mismatch.
