@@ -2,6 +2,10 @@
 
 > **A source-aware civic route for people who need to know their next step—not be overwhelmed by links.**
 
+<p align="center">
+  <img src="assets/social-preview.png" alt="CivicFlow social preview showing an editorial civic route with the words Civic intelligence, made human." width="100%" />
+</p>
+
 CivicFlow is an Express, HTMX, and TypeScript application for guided civic questions. The integrated **Civic Atelier** interface turns three common needs—checking eligibility, finding a polling place, and understanding representation—into a calm, accessible route. It preserves a hard trust boundary: an answer is either linked to a configured civic source, shown as an explicit **context preview**, or reported as unavailable. CivicFlow does not invent an authority, an election record, or a polling result.
 
 ## What Changed in the Current Integrated Version
@@ -59,6 +63,10 @@ Firebase Firestore (optional synchronization target)
 ```
 
 The primary application is intentionally server-rendered. HTMX keeps actions close to the server-side validation and session boundary instead of placing sensitive civic or account state in a thick browser client.
+
+## Repository Social Preview
+
+The canonical social-card artwork is [`assets/social-preview.png`](assets/social-preview.png). It is a 1280×640 PNG designed for [GitHub’s repository social-preview recommendation](https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/customizing-your-repositorys-social-media-preview) and is also displayed above so the visual identity travels with the README. The artwork uses the same source-aware route motif as the product: a restrained three-stop civic path, cartographic cues, and an explicit distinction between a guide and an official authority.
 
 ## Run Locally
 
