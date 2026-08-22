@@ -23,6 +23,20 @@ That means CivicFlow’s account registrations, authentication sessions, profile
 
 The deployment can run without Gemini, Google, or Firebase credentials because CivicFlow already exposes a truthful offline guide fallback. Those provider features remain unavailable until the project owner supplies the appropriate credentials through Render’s encrypted environment-variable interface; no secret is stored in Git. The same-origin application does not require `ALLOWED_ORIGINS`. A future separate frontend or cross-origin client must use its exact HTTPS origin in that setting.
 
+The service source is connected through Render’s **Public Git Repository** mode. This is sufficient for the public `main` branch, but Render does not enable automatic deploys or pull-request previews in that mode. A maintainer must manually request a new deploy from the Render dashboard after a future GitHub update, unless the workspace is later granted repository-provider access.
+
+## Verified public demonstration
+
+The free CivicFlow demonstration is live at [https://civicflow-oxyg.onrender.com](https://civicflow-oxyg.onrender.com). On 2026-08-22, its public [`/api/health`](https://civicflow-oxyg.onrender.com/api/health) endpoint returned `{"status":"ok"}`, and the server-rendered landing page loaded successfully. [3]
+
+| Smoke check | Verified behavior |
+| --- | --- |
+| Civic context | Selecting **Nairobi, Kenya** changes the visible state to **Context preview** and explains that no local source matching is connected. |
+| Offline guide | A Nairobi polling-place question produces **Guidance unavailable** and **Context preview only**, tells the visitor to consult the relevant municipal, regional, or national authority, and does not show an Indian ECI portal link. |
+| Account entry | The sign-in dialog opens with labeled email and password fields. No test account or credential was submitted. |
+
+These checks confirm the public demonstration is reachable and that its international source-state safeguard is preserved. They do not change the temporary-data or cold-start constraints of the Free plan.
+
 ## Upgrade path
 
 To make CivicFlow suitable for durable public use, replace local SQLite/session storage with managed shared services and use a persistent or production-grade web service. Attaching a Render persistent disk requires a paid web service; a Free Render Postgres database is also temporary and expires after 30 days, so it is not a durable production substitute. [1]
@@ -32,3 +46,5 @@ To make CivicFlow suitable for durable public use, replace local SQLite/session 
 [1] [Render, “Deploy for Free.”](https://render.com/docs/free)
 
 [2] [Render, “Docker on Render.”](https://render.com/docs/docker)
+
+[3] [CivicFlow public health endpoint.](https://civicflow-oxyg.onrender.com/api/health)
