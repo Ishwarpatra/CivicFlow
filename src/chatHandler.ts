@@ -10,7 +10,7 @@ import {
 } from "./uiTemplates.js";
 import { SYSTEM_CONSTANTS } from "./constants.js";
 import { fetchRepresentativesByAddress, fetchPollingLocationsByAddress } from "./civicApiService.js";
-import { getGeminiModel, resetGeminiModel, GeminiModel } from "./aiService.js";
+import { getGeminiModel, resetGeminiModel, generateNimChatCompletion, GeminiModel } from "./aiService.js";
 import { ChatHistoryItem, UserContext } from "./types.js";
 
 export const handleChat = async (
@@ -89,7 +89,8 @@ export const handleChat = async (
     }
 
     try {
-        const ai: GeminiModel = getGeminiModel(apiKey);
+        const useNim = Boolean(process.env.NVIDIA_NIM_API_KEY?.trim());
+        const ai: GeminiModel | null = useNim ? null : getGeminiModel(apiKey);
 
         let responseText = "";
 
@@ -211,20 +212,24 @@ export const handleChat = async (
             ]
         });
 
-        let response;
-        try {
-            response = await generateContent(ai);
-        } catch (error: unknown) {
-            const status = (error as { status?: number })?.status;
-            const messageText = error instanceof Error ? error.message : String(error);
-            if (status !== 401 && status !== 403 && !/unauthorized|forbidden|api key/i.test(messageText)) throw error;
-            resetGeminiModel();
-            const retryAi = getGeminiModel(apiKey);
-            if (retryAi === 'MOCK_MODE') throw error;
-            response = await generateContent(retryAi);
+        if (useNim) {
+            responseText = await generateNimChatCompletion([
+                { role: 'system', content: instructions },
+                ...history.map(h => ({ role: h.role === 'model' ? 'assistant' as const : 'user' as const, content: (h as any).parts?.[0]?.text || h.text || '' })),
+                { role: 'user', content: message },
+            ]);
+        } else {
+            let response;
+            try { response = await generateContent(ai as GeminiModel); }
+            catch (error: unknown) {
+                const status = (error as { status?: number })?.status;
+                const messageText = error instanceof Error ? error.message : String(error);
+                if (status !== 401 && status !== 403 && !/unauthorized|forbidden|api key/i.test(messageText)) throw error;
+                resetGeminiModel(); const retryAi = getGeminiModel(apiKey);
+                if (retryAi === 'MOCK_MODE') throw error; response = await generateContent(retryAi);
+            }
+            responseText = response.text || "I encountered an issue generating a response.";
         }
-
-        responseText = response.text || "I encountered an issue generating a response.";
 
         // Sync parsing if possible, or await if marked is configured as async
         const rawHtml = await marked.parse(responseText);
