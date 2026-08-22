@@ -20,4 +20,4 @@
 - [x] Inspect CivicFlow’s current Gemini-based guide integration and determine the compatible NVIDIA NIM provider contract.
 - [x] Confirm the project owner already holds an NVIDIA NIM key and will add it only through Render’s encrypted environment settings.
 - [x] Add an optional NIM provider configuration, tests, and documentation while preserving the truthful offline fallback.
-- [ ] Add the real NIM key only through Render’s encrypted environment settings and smoke-test the live guide without logging the secret.
+- [x] Add the real NIM key only through Render’s encrypted environment settings and smoke-test the live guide without logging the secret. The deployed Bengaluru guide returned a substantive response with official ECI and NVSP links; the credential was not exposed.
