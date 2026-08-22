@@ -243,6 +243,6 @@ export const handleChat = async (
         const errorMessage = e instanceof Error ? e.message : String(e);
         const safeError = "Intelligence Core Offline. Please check your connection.";
         const failedHistory: ChatHistoryItem[] = [...history, { role: 'user' as const, text: message }].slice(-20);
-        return { agentHtml: generateGenericOfflineFallbackHtml(errorMessage || safeError), newHistory: failedHistory };
+        return { agentHtml: generateGenericOfflineFallbackHtml(errorMessage || safeError, userContext?.civicContext), newHistory: failedHistory };
     }
 }
