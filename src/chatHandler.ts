@@ -13,6 +13,20 @@ import { fetchRepresentativesByAddress, fetchPollingLocationsByAddress } from ".
 import { getGeminiModel, resetGeminiModel, generateNimChatCompletion, GeminiModel } from "./aiService.js";
 import { ChatHistoryItem, UserContext } from "./types.js";
 
+const GLOBAL_PREVIEW_FORBIDDEN_REFERENCE = /\b(?:india|indian|eci|nvsp|voter\s+helpline)\b|voters\.eci\.gov\.in/iu;
+
+const enforceGlobalPreviewBoundary = (responseText: string, userContext?: UserContext): string => {
+    if (userContext?.civicContext?.source !== 'global_preview') return responseText;
+
+    const permittedSections = responseText
+        .split(/\n{2,}|(?<=[.!?])\s+(?=[A-Z])/u)
+        .filter((section) => !GLOBAL_PREVIEW_FORBIDDEN_REFERENCE.test(section))
+        .join('\n\n')
+        .trim();
+
+    return permittedSections || `CivicFlow does not have a connected official authority source for ${userContext.civicContext.label}. Please consult the appropriate municipal, regional, or national election authority for this place.`;
+};
+
 export const handleChat = async (
     message: string, 
     history: ChatHistoryItem[] = [], 
@@ -115,7 +129,7 @@ export const handleChat = async (
 
         const languageInstruction = locale === 'hi' ? 'You MUST respond entirely in Hindi (हिंदी).' : 'You MUST respond entirely in English.';
         const civicContextInstruction = userContext?.civicContext?.source === 'global_preview'
-            ? `\n\nCURRENT CIVIC CONTEXT: ${userContext.civicContext.label} is a context preview only. CivicFlow has no connected official authority source for this place. Do not call this place Indian, do not offer Indian election help, and do not mention or link to ECI, NVSP, Voter Helpline, or any India-specific source unless the user explicitly asks about India as a separate topic. State the source limitation plainly, avoid unsupported local facts, and direct the user to the appropriate municipal, regional, or national election authority for this selected place.`
+            ? `\n\nCURRENT CIVIC CONTEXT: ${userContext.civicContext.label} is a context preview only. CivicFlow has no connected official authority source for this place. Do not call this place Indian, do not offer Indian election help, and do not mention or link to ECI, NVSP, Voter Helpline, or any India-specific source. Do not mention prior contexts, prior answers, or earlier election data. State the source limitation plainly, avoid unsupported local facts, and direct the user to the appropriate municipal, regional, or national election authority for this selected place.`
             : `\n\nCURRENT CIVIC CONTEXT: India. CivicFlow may provide general Indian election guidance and only use relevant official Indian sources when appropriate. Do not invent live records, polling locations, dates, or candidate information.`;
         const instructions = SYSTEM_CONSTANTS.PROMPTS.SYSTEM_INSTRUCTION + languageInstruction + civicContextInstruction + userContextString;
 
@@ -233,6 +247,8 @@ export const handleChat = async (
             }
             responseText = response.text || "I encountered an issue generating a response.";
         }
+
+        responseText = enforceGlobalPreviewBoundary(responseText, userContext);
 
         // Sync parsing if possible, or await if marked is configured as async
         const rawHtml = await marked.parse(responseText);
