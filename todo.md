@@ -17,3 +17,7 @@
 - [x] Verify the public health endpoint and primary CivicFlow demonstration journey, including the truthful global-preview offline fallback. The public health JSON, landing page, Nairobi context-preview indicator, and source-safe “Context preview only” guide response passed without an Indian ECI portal link.
 - [x] Smoke-test the public sign-in entry point without registering a live account; the accessible account dialog and labeled email/password fields opened successfully, with no credentials submitted.
 - [x] Record the public free-demonstration URL and completed verification result in the deployment decision documentation.
+- [x] Inspect CivicFlow’s current Gemini-based guide integration and determine the compatible NVIDIA NIM provider contract.
+- [x] Confirm the project owner already holds an NVIDIA NIM key and will add it only through Render’s encrypted environment settings.
+- [x] Add an optional NIM provider configuration, tests, and documentation while preserving the truthful offline fallback.
+- [ ] Add the real NIM key only through Render’s encrypted environment settings and smoke-test the live guide without logging the secret.
