@@ -163,6 +163,22 @@ export const generateErrorHtml = (errorDetails: string) => {
     return buildChatBubble('ERR', 'bg-[#ea4335]', 'bg-[#F8F7F3]', 'border-[#ea4335]', 'shadow-[4px_4px_0px_#ea4335]', 'text-[#ea4335] flex flex-col gap-2', `<p class="font-bold uppercase tracking-widest text-xs mb-2 text-[#1A1A1A]">System Error</p><p>${safeError}</p>`, 'mb-6 relative');
 };
 
+export const generateCivicTopicOnlyHtml = () => `
+    <div class="space-y-3" role="status">
+        <p class="text-xs bg-[#2D6C62] text-white px-2 py-1 inline-block uppercase font-bold tracking-widest shadow-[2px_2px_0px_#1A1A1A]">Civic scope</p>
+        <p>CivicFlow can help with elections, voter registration, polling places, civic rights, public representatives, and participation in government.</p>
+        <p class="text-xs opacity-70">Questions outside that civic scope are not sent to the AI guide.</p>
+    </div>
+`;
+
+export const generateGuideQuotaHtml = (retryAfterMinutes: number, signedIn: boolean) => `
+    <div class="space-y-3" role="status">
+        <p class="text-xs bg-[#C96B3B] text-white px-2 py-1 inline-block uppercase font-bold tracking-widest shadow-[2px_2px_0px_#1A1A1A]">Guide limit reached</p>
+        <p>You have used this ${signedIn ? 'signed-in' : 'public'} guide allowance. Please try again in about ${Math.max(1, retryAfterMinutes)} minute${retryAfterMinutes === 1 ? '' : 's'}.</p>
+        ${signedIn ? '' : '<p class="text-xs opacity-70">Sign in for a larger guide allowance on this demonstration service.</p>'}
+    </div>
+`;
+
 export const generateVoteSuccessHtml = () => `<div class="p-3 border-2 border-[#34a853] bg-[#F8F7F3]" role="status"><p class="font-bold text-[#34a853]">Vote recorded locally</p><p class="text-xs mt-1">View your vote status from your account.</p><a href="#vote-status" class="text-xs text-[#FF9933] underline font-bold">View vote status →</a></div>`;
 export const generateVotePendingHtml = () => `<div class="p-3 border-2 border-[#FF9933] bg-[#F8F7F3]" role="status"><p class="font-bold text-[#FF9933]">Vote saved; cloud sync pending</p><p class="text-xs mt-1">Your local record is safe and will be retried by the service.</p><a href="#vote-status" class="text-xs text-[#FF9933] underline font-bold">Check sync status →</a></div>`;
 export const generateAlreadyVotedHtml = () => `<div class="p-3 border-2 border-[#4285f4] bg-[#F8F7F3]" role="status"><p class="font-bold text-[#4285f4]">Already recorded</p><p class="text-xs mt-1">You already have a vote for this election.</p><a href="#vote-status" class="text-xs text-[#FF9933] underline font-bold">View vote status →</a></div>`;
