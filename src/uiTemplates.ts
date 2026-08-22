@@ -1,4 +1,5 @@
 import DOMPurify from 'isomorphic-dompurify';
+import type { CivicContext } from './types.js';
 import { getElectionDataStatus } from './database.js';
 
 const buildChatBubble = (iconContent: string, iconBg: string, bubbleBg: string, bubbleBorder: string, bubbleShadow: string, textStyle: string, message: string, customClasses: string = "", extraAttrs: string = "") => `
@@ -118,12 +119,26 @@ export const generateOfflineBoothHtml = () => `
     </div>
 `;
 
-export const generateGenericOfflineFallbackHtml = (errorDetails: string) => {
-    const safeError = DOMPurify.sanitize(errorDetails, { ALLOWED_TAGS: [] });
+export const generateGenericOfflineFallbackHtml = (errorDetails: string, civicContext?: CivicContext) => {
+    const safePlace = DOMPurify.sanitize(civicContext?.label || 'your selected civic context', { ALLOWED_TAGS: [] });
+    const isIndia = civicContext?.source === 'india';
+    if (!isIndia) {
+        return `
+        <div class="space-y-4" role="status">
+            <p class="text-xs bg-[#ea4335] text-white px-2 py-1 inline-block uppercase font-bold tracking-widest shadow-[2px_2px_0px_#1A1A1A]">Guidance unavailable</p>
+            <p>CivicFlow cannot safely match an official civic source for <strong>${safePlace}</strong> while the guide is offline.</p>
+            <div class="border-2 border-[#1A1A1A] p-3 bg-[#F8F7F3]">
+                <p class="font-bold uppercase tracking-widest text-xs mb-1">Context preview only</p>
+                <p class="text-sm">No local election authority is linked for this selected place. Consult your municipal, regional, or national election authority before acting.</p>
+            </div>
+            <p class="text-xs opacity-70">Select an Indian civic context only if you need CivicFlow’s currently connected ECI routes.</p>
+        </div>
+        `;
+    }
     return `
-    <div class="space-y-4">
+    <div class="space-y-4" role="status">
         <p class="text-xs bg-[#ea4335] text-white px-2 py-1 inline-block uppercase font-bold tracking-widest shadow-[2px_2px_0px_#1A1A1A]">Intelligence Core Offline</p>
-        <p>I cannot process natural language right now. Please use the official ECI portals below:</p>
+        <p>I cannot process natural language right now. Use the official ECI portals for <strong>${safePlace}</strong> below:</p>
         
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4">
             <a href="https://voters.eci.gov.in/" target="_blank" class="block p-3 border-2 border-[#1A1A1A] hover:bg-[#1A1A1A] hover:text-white transition-colors shadow-[2px_2px_0px_#1A1A1A] group">
@@ -139,8 +154,6 @@ export const generateGenericOfflineFallbackHtml = (errorDetails: string) => {
                 <p class="text-[10px] opacity-80 group-hover:opacity-100">Candidate Affidavits</p>
             </a>
         </div>
-        
-        <p class="text-[10px] opacity-50 font-mono mt-4 break-words">Log Reference: ${safeError}</p>
     </div>
 `;
 };
