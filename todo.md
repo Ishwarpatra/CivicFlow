@@ -21,3 +21,8 @@
 - [x] Confirm the project owner already holds an NVIDIA NIM key and will add it only through Render’s encrypted environment settings.
 - [x] Add an optional NIM provider configuration, tests, and documentation while preserving the truthful offline fallback.
 - [x] Add the real NIM key only through Render’s encrypted environment settings and smoke-test the live guide without logging the secret. The deployed Bengaluru guide returned a substantive response with official ECI and NVSP links; the credential was not exposed.
+- [ ] Run and record live-domain functional checks for navigation, links, the guide form, context controls, and safe non-submitted authentication entry.
+- [ ] Inspect the live UI at desktop, mobile portrait, mobile landscape, and tablet breakpoints for overflow, readability, and interaction reachability.
+- [ ] Run keyboard, semantic-label, contrast, and visible-focus accessibility checks; distinguish automated evidence from manual assistive-technology limits.
+- [ ] Review live visual alignment, typography, copy, placeholder removal, and practical public performance behavior.
+- [ ] Fix and revalidate any priority UI failures, then commit non-secret changes and publish the completed UI audit report.
