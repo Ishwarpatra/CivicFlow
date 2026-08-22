@@ -1,43 +1,34 @@
-# CivicFlow Production Deployment Decision
+# CivicFlow Free Demonstration Deployment Decision
 
-> **Decision:** Use a Render Docker web service with one persistent disk mounted at `/var/lib/civicflow` for the first public CivicFlow release. The repository includes `render.yaml` to capture this configuration; no public service has been created yet.
+> **Decision:** Deploy CivicFlow as a free Render Docker **demonstration**, not a durable production service. The repository `render.yaml` uses Render’s Free plan and deliberately does not attach a disk.
 
-## Why this runtime is required
+## Demonstration boundary
 
-CivicFlow is an Express application with a local SQLite application database and SQLite-backed sessions. Its `DB_PATH` and `SESSION_DIR` must therefore share a durable writable mount. A platform with only an ephemeral filesystem would discard registrations, profile changes, chat history, votes, and session state when the service restarts. Render supports Dockerfile-based services and persistent disks, making it compatible with the repository’s existing container contract. [1] [2]
+Render’s Free web services are suitable for testing, hobby projects, and previews, but Render explicitly advises against using them for production applications. A Free service has an ephemeral filesystem, so local SQLite databases and session files are lost when the service restarts, redeploys, or spins down after idle time. [1]
 
-Render disks are bound to a single running service instance. They cannot be shared across replicas, and a disk-backed deployment has a short service interruption while the former instance stops before the replacement starts. This is the appropriate integrity boundary for CivicFlow’s present SQLite design, but it means the service must remain at **one instance** until the database and session store are migrated to shared managed services. [1]
+That means CivicFlow’s account registrations, authentication sessions, profile changes, chat history, local vote records, and other SQLite-backed activity are **temporary demonstration data**. Visitors must not rely on this public URL to retain personal data, and the project must not claim durable accounts, records, or audit history.
 
-## Required service configuration
+## Free deployment configuration
 
-| Concern | Release setting | Rationale |
+| Concern | Demonstration setting | User-visible consequence |
 | --- | --- | --- |
-| Runtime | Docker, using the repository `Dockerfile` | Preserves the tested Node 20 and native SQLite dependency build. [2] |
-| Plan | Render Starter or another disk-capable paid web-service plan | Render persistent disks are available to paid web services. [1] |
-| Health check | `GET /api/health` | Confirms the Express process can query SQLite before Render routes traffic. |
-| Persistent disk | `civicflow-data` at `/var/lib/civicflow` | Persists `civicflow.db` and the SQLite session file across restarts. |
-| Runtime paths | `DB_PATH=/var/lib/civicflow/civicflow.db`, `SESSION_DIR=/var/lib/civicflow`, `SESSION_DB=sessions.db` | Matches the current container and Compose configuration. |
-| Session signing | Render-generated `SESSION_SECRET` | Avoids an ephemeral or repository-stored session secret. |
-| Scaling | Exactly one instance | Prevents concurrent writers against the local SQLite files. [1] |
+| Runtime | Docker, using the repository `Dockerfile` | Preserves the tested Node runtime and native SQLite dependency build. [2] |
+| Render plan | `free` | No paid instance or persistent disk is created. [1] |
+| Health check | `GET /api/health` | Render can test whether Express can query the temporary SQLite database. |
+| Storage paths | `/var/lib/civicflow/civicflow.db` and `/var/lib/civicflow` | Data works while an instance is running but can reset after idle spin-down, restart, or redeploy. [1] |
+| Session secret | Render-generated `SESSION_SECRET` | Session cookies remain signed for the life of the service configuration, but sessions themselves are temporary. |
+| Availability | Free service may spin down after 15 minutes without inbound traffic | The next visit can experience an approximately one-minute wake-up delay. [1] |
 
 ## Provider and origin configuration
 
-The first deployment can operate with its truthful offline guide fallback if `GEMINI_API_KEY` and optional Google/Firebase credentials are absent. Those keys must only be added through Render’s encrypted environment-variable interface once the account owner provides them; they are never stored in `render.yaml` or committed to Git. `ALLOWED_ORIGINS` is not needed for the same-origin web experience. If a separate frontend or custom domain later calls CivicFlow’s API cross-origin, set it to the exact HTTPS origin or origins.
+The deployment can run without Gemini, Google, or Firebase credentials because CivicFlow already exposes a truthful offline guide fallback. Those provider features remain unavailable until the project owner supplies the appropriate credentials through Render’s encrypted environment-variable interface; no secret is stored in Git. The same-origin application does not require `ALLOWED_ORIGINS`. A future separate frontend or cross-origin client must use its exact HTTPS origin in that setting.
 
-## Operational boundary
+## Upgrade path
 
-The disk contains state and should be treated as production data. Render provides encrypted persistent disks and daily snapshots, but application-level export and restore procedures remain necessary for operational resilience. [1] Before any deploy, the maintainer should record the current release commit and retain a database backup. A future high-availability deployment requires migration to a managed relational database and shared session store; simply enabling more replicas would be unsafe.
-
-## Alternative considered
-
-Railway also supports Docker services and persistent volumes. It remains a viable later choice, but its volume and replica limits do not improve CivicFlow’s current single-instance SQLite constraint. Render was selected because its Render Blueprint can declare the Docker service, health path, environment variables, and disk together in the repository. [3] [4]
+To make CivicFlow suitable for durable public use, replace local SQLite/session storage with managed shared services and use a persistent or production-grade web service. Attaching a Render persistent disk requires a paid web service; a Free Render Postgres database is also temporary and expires after 30 days, so it is not a durable production substitute. [1]
 
 ## References
 
-[1] [Render, “Persistent Disks.”](https://render.com/docs/disks)
+[1] [Render, “Deploy for Free.”](https://render.com/docs/free)
 
 [2] [Render, “Docker on Render.”](https://render.com/docs/docker)
-
-[3] [Render, “Blueprint YAML Reference.”](https://render.com/docs/blueprint-spec)
-
-[4] [Railway, “Volumes.”](https://docs.railway.com/reference/volumes)
