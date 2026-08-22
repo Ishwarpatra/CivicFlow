@@ -16,6 +16,19 @@ The server calls NVIDIA’s OpenAI-compatible `POST /v1/chat/completions` endpoi
 
 After redeploy, send a neutral civic question from the public guide. For a non-Indian preview context, also confirm the answer remains jurisdiction-aware; absence of a connected authority source must not be presented as verified local election data.
 
+## Guide Safeguards
+
+Before CivicFlow calls NIM or Gemini, the API applies a deterministic civic-topic eligibility check. It accepts elections, voter registration, polling locations, public representatives, civic rights, government participation, and closely related public-service questions. Unrelated prompts are rejected in the guide interface and are neither sent to the provider nor counted against a guide allowance.
+
+| Identity | Default allowance | Window | Notes |
+| --- | ---: | --- | --- |
+| Public visitor | 6 civic guide requests | 60 minutes | Bound to the request IP address. |
+| Signed-in account | 20 civic guide requests | 60 minutes | Bound to the CivicFlow user ID. |
+
+The defaults can be adjusted through the non-secret `GUIDE_QUOTA_WINDOW_MINUTES`, `GUIDE_ANONYMOUS_LIMIT`, and `GUIDE_SIGNED_IN_LIMIT` environment variables. The signed-in allowance is deliberately higher, while the existing broad request limiter remains in place as a separate abuse-control layer.
+
+> This free Render demonstration uses local SQLite and session storage. A restart, redeploy, or stateless host replacement can reset usage counters; the values are therefore guardrails for the demonstration, not durable billing or account entitlements.
+
 ## Deployment Status
 
 On 22 August 2026, Render accepted the encrypted `NVIDIA_NIM_API_KEY` environment variable and deployed CivicFlow commit `87f8538` successfully at `https://civicflow-oxyg.onrender.com`. The key value was neither copied into this repository nor recorded in this document. The public guide-response check was then completed.
