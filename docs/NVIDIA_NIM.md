@@ -18,7 +18,7 @@ After redeploy, send a neutral civic question from the public guide. For a non-I
 
 ## Deployment Status
 
-On 22 August 2026, Render accepted the encrypted `NVIDIA_NIM_API_KEY` environment variable and deployed CivicFlow commit `87f8538` successfully at `https://civicflow-oxyg.onrender.com`. The key value was neither copied into this repository nor recorded in this document. A public guide-response check remains the final validation step.
+On 22 August 2026, Render accepted the encrypted `NVIDIA_NIM_API_KEY` environment variable and deployed CivicFlow commit `87f8538` successfully at `https://civicflow-oxyg.onrender.com`. The key value was neither copied into this repository nor recorded in this document. The public guide-response check was then completed.
 
 The final public smoke test asked what to check before confirming voter enrolment in Bengaluru. The deployed guide returned a substantive, context-aware checklist with official `eci.gov.in` and `nvsp.in` links, while preserving the site-wide instruction to verify final election information with the appropriate authority. The credential value was not displayed, logged, or committed.
 
