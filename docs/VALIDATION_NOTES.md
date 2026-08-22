@@ -15,3 +15,7 @@ The rebuilt local service reloaded with the requested labels absent, the reposit
 Searching `Pune` returned the worldwide geocoder's Indian and international place matches. The selected-context disclosure is checked in the next interaction; list entries themselves remain neutral search choices and do not claim official civic-source coverage.
 
 Selecting **Pune, India** rendered **Context preview** on the active context card and reported that local source matching is not connected. The chat panel was reset with the jurisdiction-safety message. This confirms that dynamically resolved Indian places do not inherit the curated Indian civic-source route.
+
+### GitHub publication check
+
+On 22 August 2026, the pushed main-branch files were viewed directly on GitHub: [global place-search documentation](https://github.com/Ishwarpatra/CivicFlow/blob/main/docs/PLACE_SEARCH.md) and [API enforcement](https://github.com/Ishwarpatra/CivicFlow/blob/main/src/routes/api.ts). GitHub showed the expected `docs(places): document global search boundaries` and `feat(api): enforce civic scope and guide allowances` commits under **Ishwarpatra**.
