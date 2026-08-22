@@ -1,20 +1,21 @@
 # CivicFlow Intelligent Indian Election Navigator
 
-**CivicFlow** is an AI-powered civic engagement platform that helps Indian citizens navigate the electoral process from checking voter eligibility and finding their nearest polling booth to knowing their elected representatives all in seconds and in multiple languages. 
+**CivicFlow** is a source-aware civic guidance application. Its **Civic Atelier** interface turns eligibility, polling-place, and representative questions into a clear three-stop route, while explicitly separating verified records from contextual guidance.
 
 ---
 
 ## Who Is It For?
 
-- **First-time voters** overwhelmed by the 100-page ECI FAQ
-- **Urban migrants** who don't know which constituency they belong to
-- **Rural voters** with low digital literacy who need guided, conversational access to civic data
+- **First-time voters** who need a calm explanation of the next civic step.
+- **Urban migrants** who need to understand what location or constituency information is relevant.
+- **Voters with low digital literacy** who benefit from a guided, conversational path to authoritative information.
+- **People exploring another civic context** who must not be shown invented local records or links.
 
 ---
 
 ## The Problem It Solves
 
-India's election infrastructure is fragmented across 50+ portals. A voter must navigate ECI, NVSP, Voter Helpline, and state-level ERO sites just to answer three simple questions: *Am I eligible? Where do I vote? Who represents me?*
+India's election infrastructure is fragmented across many official portals. A voter may need to navigate ECI, NVSP, Voter Helpline, and state-level ERO services to answer three simple questions: *Am I eligible? Where do I vote? Who represents me?*
 
 CivicFlow unifies this into a single conversational interface powered by Gemini AI, Google Civic Information API, and Google Maps.
 
@@ -43,8 +44,20 @@ CivicFlow is built on the principle of **"Single Point of Truth"** unification.
 
 1.  **Guided Navigation**: Instead of presenting a menu of 50 links, the system uses a **Guided Chat Flow**. It proactively asks for the user's State and Constituency only when needed for specific actions (like finding a representative), storing these in the session for future context.
 2.  **Hybrid Persistence**: Votes are written to SQLite first and synchronized to Firestore when configured. A local sync queue records pending cloud synchronization instead of reporting a failed cloud write as fully synchronized. Chat history, credits, users, and sessions remain in SQLite.
-3.  **Graceful Degeneracy**: If the Gemini AI is unavailable (503), the system automatically detects this and injects a **"Static Intelligence"** layer that provides official ECI links based on the user's current context.
+3.  **Graceful Degeneracy**: If Gemini AI is unavailable, CivicFlow returns a transparent offline answer. Indian contexts may receive connected ECI routes; all other contexts receive an explicit "context preview" state and no fabricated authority link.
 4.  **Security-First HTMX**: We use HTMX for a "Hypermedia" approach, which allows us to keep all business logic and state (including Auth and Session) on the server, significantly reducing the attack surface compared to a thick-client SPA.
+
+## User Journey and Trust States
+
+The primary interface is intentionally a three-stop route: **Check eligibility**, **Find polling place**, and **Know your representative**. Each action opens a guided response rather than claiming a result that CivicFlow cannot verify.
+
+| Context state | What the user sees | What CivicFlow may do |
+|---|---|---|
+| **Indian civic-source route** | A connected India context, such as Bengaluru or Mumbai | Offer ECI-oriented routes when the relevant source or provider is configured. |
+| **Context preview** | A selected global city without a linked local authority | Preserve the location in the guide and state that local source matching is not connected. |
+| **Provider unavailable** | A clear unavailable state | Explain the limitation and direct the user to the appropriate official authority rather than guessing. |
+
+See [the user guide](docs/USER_GUIDE.md) for the visible interaction model and [the integration guide](docs/INTEGRATION.md) for the server-side contracts.
 
 ---
 
@@ -62,13 +75,12 @@ CivicFlow is built on the principle of **"Single Point of Truth"** unification.
 
 ## Features
 
-- **Eligibility Check** — AI-guided voter eligibility Q&A (DOB, state, constituency)
-- **Find My Booth** — Uses browser geolocation + Google Maps to show nearest polling stations
-- **Know Your Rep** — Fetches real representatives via Google Civic Information API
-- **Multi-language** — English + Hindi UI with Gemini responding in selected locale
-- **Secure Auth** — bcrypt passwords, CSRF protection, HttpOnly cookies, helmet CSP
-- **Admin Panel** — Live pino log viewer, HTMX-powered, admin-only
-- **Prompt Credits** — Gamified civic engagement reward system
+- **Civic Atelier route** — An editorial three-stop interface that keeps a user's next action visible.
+- **Context-aware guide** — The guide sends the selected city or region to the server and handles unavailable sources truthfully.
+- **Eligibility, polling, and representative flows** — Existing server-rendered actions remain available through accessible buttons and dialogs.
+- **Secure account workflows** — Validated sign-in, profile, notification, and logout contracts with CSRF protection and HttpOnly cookies.
+- **Source-status disclosure** — Connected, preview, and unavailable data states are visible before a user relies on a civic outcome.
+- **Accessible HTMX interface** — Keyboard-reachable controls, skip navigation, semantic regions, and responsive layouts.
 
 ---
 
@@ -162,6 +174,7 @@ npm run coverage
 ## Known Limitations
 
 - The optional Google Civic integration accepts only India-scoped addresses and may return partial results; official Election Commission portals remain the authority for current election information.
+- The global city selector is a **context chooser**, not a worldwide civic-data directory. A non-Indian location is labelled as a preview until a verified local authority adapter is connected.
 - Firestore integration degrades gracefully to SQLite if `FIREBASE_*` vars are unset
 - Chat history is capped at 20 messages per session to limit memory usage.
 - The bundled 2024 dataset is historical and intentionally marked stale; live election results require an official, refreshed source.
