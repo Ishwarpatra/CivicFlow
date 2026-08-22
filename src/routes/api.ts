@@ -21,6 +21,7 @@ declare module 'express-session' {
         email?: string;
         role?: 'voter' | 'admin';
         chatHistory?: ChatHistoryItem[];
+        chatContextLabel?: string;
         csrfToken?: string;
     }
 }
@@ -139,6 +140,10 @@ export function createApiRouter(db: Database, logger: Logger, chatLimiter: Reque
                     label: place,
                     source: /,\s*india$/i.test(place) ? 'india' : 'global_preview',
                 };
+                if (sess.chatContextLabel !== place) {
+                    dbHistory = [];
+                    sess.chatContextLabel = place;
+                }
             }
 
             const formattedHistory: ChatHistoryItem[] = dbHistory.map((item) => ({
