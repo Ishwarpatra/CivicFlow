@@ -32,11 +32,17 @@ export interface Candidate {
     incumbent: number;
 }
 
+export interface CivicContext {
+    label: string;
+    source: 'india' | 'global_preview';
+}
+
 export interface UserContext {
     user: Partial<User> | null;
     constituency?: Constituency;
     representatives?: Candidate[];
     electionData?: Record<string, unknown> | null;
+    civicContext?: CivicContext;
 }
 
 export interface ChatSessionRow {
