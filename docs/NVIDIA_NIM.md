@@ -16,6 +16,12 @@ The server calls NVIDIA’s OpenAI-compatible `POST /v1/chat/completions` endpoi
 
 After redeploy, send a neutral civic question from the public guide. For a non-Indian preview context, also confirm the answer remains jurisdiction-aware; absence of a connected authority source must not be presented as verified local election data.
 
+## Deployment Status
+
+On 22 August 2026, Render accepted the encrypted `NVIDIA_NIM_API_KEY` environment variable and deployed CivicFlow commit `87f8538` successfully at `https://civicflow-oxyg.onrender.com`. The key value was neither copied into this repository nor recorded in this document. A public guide-response check remains the final validation step.
+
+The final public smoke test asked what to check before confirming voter enrolment in Bengaluru. The deployed guide returned a substantive, context-aware checklist with official `eci.gov.in` and `nvsp.in` links, while preserving the site-wide instruction to verify final election information with the appropriate authority. The credential value was not displayed, logged, or committed.
+
 ## References
 
 [1] [NVIDIA NIM LLM APIs](https://docs.api.nvidia.com/nim/reference/llm-apis)
