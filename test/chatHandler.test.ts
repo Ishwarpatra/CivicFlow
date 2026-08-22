@@ -11,7 +11,8 @@ vi.mock('../src/aiService.js', () => ({
             })
         }
     }),
-    resetGeminiModel: vi.fn()
+    resetGeminiModel: vi.fn(),
+    generateNimChatCompletion: vi.fn()
 }));
 
 vi.mock('../src/civicApiService.js', () => ({
@@ -161,6 +162,29 @@ describe('handleChat', () => {
         expect(call.config.system_instruction).toContain('Nairobi, Kenya is a context preview only');
         expect(call.config.system_instruction).toContain('do not mention or link to ECI');
         expect(call.config.system_instruction).toContain('Do not call this place Indian');
+        expect(call.config.system_instruction).toContain('Do not mention prior contexts');
+    });
+
+    it('removes India-specific prior-context leakage from a NIM global-preview response', async () => {
+        const { generateNimChatCompletion } = await import('../src/aiService.js');
+        const priorNimKey = process.env.NVIDIA_NIM_API_KEY;
+        process.env.NVIDIA_NIM_API_KEY = 'test-nim-key';
+        (generateNimChatCompletion as any).mockResolvedValueOnce(
+            'For Nairobi, start with the relevant county or national authority.\n\nIf you have questions about the Indian election data provided earlier, I can help.'
+        );
+
+        try {
+            const result = await handleChat('How can I check civic information?', [], 'en', undefined, {
+                civicContext: { label: 'Nairobi, Kenya', source: 'global_preview' },
+            });
+
+            expect(result.agentHtml).toContain('For Nairobi');
+            expect(result.agentHtml).not.toContain('Indian election data');
+            expect(result.agentHtml).not.toContain('India');
+        } finally {
+            if (priorNimKey === undefined) delete process.env.NVIDIA_NIM_API_KEY;
+            else process.env.NVIDIA_NIM_API_KEY = priorNimKey;
+        }
     });
 
     it('does not render insecure HTTP links from a guide response', async () => {
