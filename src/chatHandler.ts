@@ -114,7 +114,10 @@ export const handleChat = async (
         }
 
         const languageInstruction = locale === 'hi' ? 'You MUST respond entirely in Hindi (हिंदी).' : 'You MUST respond entirely in English.';
-        const instructions = SYSTEM_CONSTANTS.PROMPTS.SYSTEM_INSTRUCTION + languageInstruction + userContextString;
+        const civicContextInstruction = userContext?.civicContext?.source === 'global_preview'
+            ? `\n\nCURRENT CIVIC CONTEXT: ${userContext.civicContext.label} is a context preview only. CivicFlow has no connected official authority source for this place. Do not call this place Indian, do not offer Indian election help, and do not mention or link to ECI, NVSP, Voter Helpline, or any India-specific source unless the user explicitly asks about India as a separate topic. State the source limitation plainly, avoid unsupported local facts, and direct the user to the appropriate municipal, regional, or national election authority for this selected place.`
+            : `\n\nCURRENT CIVIC CONTEXT: India. CivicFlow may provide general Indian election guidance and only use relevant official Indian sources when appropriate. Do not invent live records, polling locations, dates, or candidate information.`;
+        const instructions = SYSTEM_CONSTANTS.PROMPTS.SYSTEM_INSTRUCTION + languageInstruction + civicContextInstruction + userContextString;
 
         // FIND_BOOTH_LOCATION: coordinates received — generate Google Maps embed + link
         if (message.startsWith(SYSTEM_CONSTANTS.COMMANDS.FIND_BOOTH_LOCATION)) {
@@ -234,7 +237,8 @@ export const handleChat = async (
         // Sync parsing if possible, or await if marked is configured as async
         const rawHtml = await marked.parse(responseText);
         const cleanHtml = DOMPurify.sanitize(rawHtml, { USE_PROFILES: { html: true } });
-        const agentHtml = `<div class="[&>p]:mb-3 [&>p:last-child]:mb-0 [&_a]:text-[#FF9933] [&_a]:font-bold [&_a]:underline hover:[&_a]:text-[#1A1A1A] [&_a]:transition-colors [&_strong]:font-bold">${cleanHtml}</div>`;
+        const httpsOnlyHtml = cleanHtml.replace(/<a\b([^>]*?)href="http:\/\/[^\"]+"([^>]*)>([\s\S]*?)<\/a>/gi, '<span$1$2>$3</span>');
+        const agentHtml = `<div class="[&>p]:mb-3 [&>p:last-child]:mb-0 [&_a]:text-[#FF9933] [&_a]:font-bold [&_a]:underline hover:[&_a]:text-[#1A1A1A] [&_a]:transition-colors [&_strong]:font-bold">${httpsOnlyHtml}</div>`;
 
         const simplifiedHistory: ChatHistoryItem[] = [...history, { role: 'user', text: message }, { role: 'model', text: responseText }].map((h) => ({
             role: (h.role === 'model' ? 'model' : 'user') as 'user' | 'model',
