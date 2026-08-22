@@ -5,3 +5,7 @@
 - [x] Validate the integrated application and prepare a safe review checkpoint.
 - [x] Review file-level changes, commit them separately, and push to Ishwarpatra/CivicFlow.
 - [x] Verify GitHub contribution attribution for the pushed CivicFlow commits and correct any repository-controlled mismatch.
+- [x] Audit README, Docker, environment, and supporting documentation for integration drift.
+- [x] Refresh the README and supporting user-developer guides for current setup and trust boundaries.
+- [x] Modernize Docker assets and verify the containerized production workflow.
+- [ ] Run checks and push file-scoped documentation and Docker commits.
