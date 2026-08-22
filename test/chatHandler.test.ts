@@ -147,4 +147,30 @@ describe('handleChat', () => {
         const call = mockModel.models.generateContent.mock.calls[0][0];
         expect(call.config.system_instruction).toContain('Hindi');
     });
+
+    it('adds a source-safe global-preview instruction before calling the guide', async () => {
+        const { getGeminiModel } = await import('../src/aiService.js');
+        const mockModel = { models: { generateContent: vi.fn().mockResolvedValue({ text: 'Use the appropriate local authority.' }) } };
+        (getGeminiModel as any).mockReturnValueOnce(mockModel);
+
+        await handleChat('How can I check civic information?', [], 'en', undefined, {
+            civicContext: { label: 'Nairobi, Kenya', source: 'global_preview' },
+        });
+
+        const call = mockModel.models.generateContent.mock.calls[0][0];
+        expect(call.config.system_instruction).toContain('Nairobi, Kenya is a context preview only');
+        expect(call.config.system_instruction).toContain('do not mention or link to ECI');
+        expect(call.config.system_instruction).toContain('Do not call this place Indian');
+    });
+
+    it('does not render insecure HTTP links from a guide response', async () => {
+        const { getGeminiModel } = await import('../src/aiService.js');
+        const mockModel = { models: { generateContent: vi.fn().mockResolvedValue({ text: '[Official resource](http://example.test)' }) } };
+        (getGeminiModel as any).mockReturnValueOnce(mockModel);
+
+        const result = await handleChat('Show an official resource.');
+
+        expect(result.agentHtml).not.toContain('href="http://');
+        expect(result.agentHtml).toContain('Official resource');
+    });
 });
