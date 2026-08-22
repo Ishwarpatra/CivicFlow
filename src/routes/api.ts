@@ -11,7 +11,9 @@ import {
     generateVoteErrorHtml, 
     generateLoginToVoteHtml, 
     generateCreditUpdateScript,
-    generateAdminLogsHtml
+    generateAdminLogsHtml,
+    generateCivicTopicOnlyHtml,
+    generateGuideQuotaHtml
 } from '../uiTemplates.js';
 import { User, ChatSessionRow, Constituency, Candidate, UserContext, ChatHistoryItem } from '../types.js';
 
@@ -44,6 +46,57 @@ import { Firestore } from 'firebase-admin/firestore';
 import { RequestHandler } from 'express';
 
 const chatLocks = new Map<string, Promise<void>>();
+const GUIDE_WINDOW_MS = Math.max(60_000, Number.parseInt(process.env.GUIDE_QUOTA_WINDOW_MINUTES || '60', 10) * 60_000 || 60 * 60_000);
+const ANONYMOUS_GUIDE_LIMIT = Math.max(1, Number.parseInt(process.env.GUIDE_ANONYMOUS_LIMIT || '6', 10) || 6);
+const SIGNED_IN_GUIDE_LIMIT = Math.max(ANONYMOUS_GUIDE_LIMIT, Number.parseInt(process.env.GUIDE_SIGNED_IN_LIMIT || '20', 10) || 20);
+const PLACE_SEARCH_WINDOW_MS = 60_000;
+const PLACE_SEARCH_LIMIT = 20;
+const placeSearchWindows = new Map<string, { startedAt: number; count: number }>();
+const placeSearchCache = new Map<string, { expiresAt: number; results: Array<{ label: string; detail: string; source: 'india' | 'global_preview' }> }>();
+const CURATED_INDIA_CIVIC_CONTEXTS = new Set(['Bengaluru, India', 'Mumbai, India', 'Delhi, India']);
+
+const CIVIC_TOPIC_PATTERN = /\b(?:election(?:s|al)?|vote(?:r|rs|d|s|ing)?|ballot|poll(?:ing|s)?|candidate(?:s|cy)?|representative(?:s)?|constituency|ward|mayor|council(?:lor|lors)?|parliament|legislature|assembly|referendum|petition|civic|citizen(?:ship)?|public\s+office|government|governance|municipal|local\s+authority|city\s+hall|civic\s+right(?:s)?|eligib(?:le|ility)|register(?:ed|ing|ation)?|epic|booth|democracy|campaign|manifesto|political|participation|complaint|grievance|city\s+service(?:s)?|municipal\s+service(?:s)?|emergency\s+civic\s+service(?:s)?|rti|information\s+act|public\s+hearing|public\s+budget|zoning|permit|licen[cs]e|tax(?:es|ation)?|benefit(?:s)?|welfare|prime\s+minister|president|governor|minister)\b/iu;
+
+const isSystemCommand = (message: string): boolean => (
+    message === SYSTEM_CONSTANTS.COMMANDS.START_PITCH
+    || message === SYSTEM_CONSTANTS.COMMANDS.KNOW_REP
+    || message === SYSTEM_CONSTANTS.COMMANDS.ELECTION_RESULTS
+    || message.startsWith(SYSTEM_CONSTANTS.COMMANDS.FIND_BOOTH_LOCATION)
+);
+
+const isCivicTopic = (message: string): boolean => isSystemCommand(message) || CIVIC_TOPIC_PATTERN.test(message);
+
+const consumePlaceSearchWindow = (identity: string): boolean => {
+    const now = Date.now();
+    const current = placeSearchWindows.get(identity);
+    if (!current || now - current.startedAt >= PLACE_SEARCH_WINDOW_MS) {
+        placeSearchWindows.set(identity, { startedAt: now, count: 1 });
+        return true;
+    }
+    if (current.count >= PLACE_SEARCH_LIMIT) return false;
+    current.count += 1;
+    return true;
+};
+
+type GuideUsageRow = { window_started_at: number; request_count: number };
+
+const consumeGuideAllowance = (db: Database, identity: string, limit: number): { allowed: true } | { allowed: false; retryAfterMinutes: number } => {
+    const now = Date.now();
+    const existing = db.prepare('SELECT window_started_at, request_count FROM guide_usage WHERE identity = ?').get(identity) as GuideUsageRow | undefined;
+    if (!existing || now - existing.window_started_at >= GUIDE_WINDOW_MS) {
+        db.prepare(`
+            INSERT INTO guide_usage (identity, window_started_at, request_count)
+            VALUES (?, ?, 1)
+            ON CONFLICT(identity) DO UPDATE SET window_started_at = excluded.window_started_at, request_count = excluded.request_count
+        `).run(identity, now);
+        return { allowed: true };
+    }
+    if (existing.request_count >= limit) {
+        return { allowed: false, retryAfterMinutes: Math.ceil((GUIDE_WINDOW_MS - (now - existing.window_started_at)) / 60_000) };
+    }
+    db.prepare('UPDATE guide_usage SET request_count = request_count + 1 WHERE identity = ?').run(identity);
+    return { allowed: true };
+};
 
 async function acquireChatLock(key: string): Promise<() => void> {
     const previous = chatLocks.get(key) || Promise.resolve();
@@ -70,6 +123,48 @@ export function createApiRouter(db: Database, logger: Logger, chatLimiter: Reque
             FOREIGN KEY (user_id) REFERENCES users(id)
         )
     `);
+    db.exec(`
+        CREATE TABLE IF NOT EXISTS guide_usage (
+            identity TEXT PRIMARY KEY,
+            window_started_at INTEGER NOT NULL,
+            request_count INTEGER NOT NULL DEFAULT 0
+        )
+    `);
+
+    router.get('/places', async (req: express.Request, res: express.Response) => {
+        const queryResult = z.object({ query: z.string().trim().min(2).max(100) }).safeParse(req.query);
+        if (!queryResult.success) return res.status(400).json({ results: [] });
+        if (!consumePlaceSearchWindow(req.ip || 'unknown')) return res.status(429).json({ results: [], error: 'Place search is temporarily rate-limited. Please retry shortly.' });
+
+        const normalizedQuery = queryResult.data.query.toLowerCase();
+        const cached = placeSearchCache.get(normalizedQuery);
+        if (cached && cached.expiresAt > Date.now()) return res.json({ results: cached.results });
+
+        try {
+            const upstream = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(queryResult.data.query)}&count=8&language=en&format=json`, {
+                headers: { accept: 'application/json' },
+                signal: AbortSignal.timeout(4_000),
+            });
+            if (!upstream.ok) throw new Error(`Place search upstream returned ${upstream.status}`);
+            const body = await upstream.json() as { results?: Array<{ name?: unknown; country?: unknown; country_code?: unknown; admin1?: unknown }> };
+            const results = (body.results || []).flatMap((item) => {
+                if (typeof item.name !== 'string' || !item.name.trim()) return [];
+                const country = typeof item.country === 'string' ? item.country.trim() : '';
+                const admin1 = typeof item.admin1 === 'string' ? item.admin1.trim() : '';
+                const source = 'global_preview' as const;
+                return [{
+                    label: country ? `${item.name.trim()}, ${country}` : item.name.trim(),
+                    detail: [admin1, country].filter(Boolean).join(' · ') || 'Context preview',
+                    source,
+                }];
+            });
+            placeSearchCache.set(normalizedQuery, { expiresAt: Date.now() + 10 * 60_000, results });
+            res.json({ results });
+        } catch (error) {
+            logger.warn({ err: error instanceof Error ? error.message : String(error) }, 'Global place search unavailable');
+            res.status(502).json({ results: [], error: 'Global place search is temporarily unavailable.' });
+        }
+    });
 
     // Use standard urlencoded body parsing for HTMX forms
     router.post('/chat', chatLimiter, async (req: express.Request, res: express.Response) => {
@@ -86,6 +181,17 @@ export function createApiRouter(db: Database, logger: Logger, chatLimiter: Reque
             const sess = req.session;
             if (!sess) return res.status(500).send(generateErrorHtml("Session initialization failed."));
             releaseChatLock = await acquireChatLock(`chat:${sess.userId || req.ip}`);
+
+            if (!isCivicTopic(message)) {
+                return res.status(422).send(generateAgentMessageHtml(generateCivicTopicOnlyHtml()));
+            }
+
+            const signedIn = Boolean(sess.userId);
+            const guideAllowance = consumeGuideAllowance(db, signedIn ? `user:${sess.userId}` : `ip:${req.ip}`, signedIn ? SIGNED_IN_GUIDE_LIMIT : ANONYMOUS_GUIDE_LIMIT);
+            if (!guideAllowance.allowed) {
+                res.setHeader('Retry-After', String(Math.max(60, guideAllowance.retryAfterMinutes * 60)));
+                return res.status(429).send(generateAgentMessageHtml(generateGuideQuotaHtml(guideAllowance.retryAfterMinutes, signedIn)));
+            }
 
             logger.info({
                 userId: sess.userId || 'anonymous',
@@ -138,7 +244,7 @@ export function createApiRouter(db: Database, logger: Logger, chatLimiter: Reque
             if (place) {
                 userContext.civicContext = {
                     label: place,
-                    source: /,\s*india$/i.test(place) ? 'india' : 'global_preview',
+                    source: CURATED_INDIA_CIVIC_CONTEXTS.has(place) ? 'india' : 'global_preview',
                 };
                 if (sess.chatContextLabel !== place) {
                     dbHistory = [];
