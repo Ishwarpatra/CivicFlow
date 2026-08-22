@@ -13,4 +13,7 @@
 - [x] Confirm the selected Render host supports CivicFlow’s Docker runtime and health checks; the free demonstration intentionally uses ephemeral filesystem storage.
 - [x] Replace the persistent-service blueprint and deployment record with a free stateless demonstration configuration and explicit reset warning.
 - [x] Commit and remotely verify the revised free-deployment files under the verified GitHub identity.
-- [ ] Create the free Render demonstration service from `main`, then verify its public health endpoint and primary user journey.
+- [x] Complete the initial build for the free Render demonstration service at `https://civicflow-oxyg.onrender.com` (Docker, Free instance, `/api/health`, signed sessions configured).
+- [x] Verify the public health endpoint and primary CivicFlow demonstration journey, including the truthful global-preview offline fallback. The public health JSON, landing page, Nairobi context-preview indicator, and source-safe “Context preview only” guide response passed without an Indian ECI portal link.
+- [x] Smoke-test the public sign-in entry point without registering a live account; the accessible account dialog and labeled email/password fields opened successfully, with no credentials submitted.
+- [x] Record the public free-demonstration URL and completed verification result in the deployment decision documentation.
