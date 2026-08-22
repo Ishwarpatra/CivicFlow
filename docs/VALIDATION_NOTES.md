@@ -27,3 +27,11 @@ A local Chromium capture at 375 px wide preserved the condensed navigation, read
 The local browser's first jump-to-end attempt retained a portion of the hero and guide in view, so the footer action is being verified by a normal lower-page scroll rather than treating the tall viewport capture as a reliable document-height measurement.
 
 The rendered local DOM exposes the footer's **VIEW THE CIVICFLOW REPOSITORY** link and its HTTPS repository destination. The footer's responsive rule switches the action group to left alignment and wrapping at 650 px; this is the mobile behavior covered by the stylesheet review. The browser's reported scroll geometry was inconclusive, so the footer's lower-boundary placement should be rechecked after deployment in a physical mobile browser.
+
+## Public release verification — 22 August 2026
+
+Render deployment `dep-da4t7mbncjis73f2h3d0` reached **Live** from the latest `main` commit, `e04a3fe`. The public health endpoint returned `200 OK`, and `GET /api/places?query=Accra` returned normalized Ghana results marked `global_preview`.
+
+In the deployed Chromium UI, the revised route, guide, and footer controls rendered without the removed overlapping section labels. The public footer exposed the visible **VIEW THE CIVICFLOW REPOSITORY** link. Searching for **Accra** produced global Ghana results; selecting one changed the active location to **Context preview** and stated that local source matching was not connected.
+
+The public guardrail returned the civic-only response for `Write a pasta recipe`, and the rendered status announced **“Only civic questions are sent to the guide.”** A valid Accra voter-registration question completed through NIM, stated that no connected official source existed for the selected preview context, and contained no India-specific authority guidance. The local mobile-width evidence remains the responsive check for this release; physical-device and non-Chromium validation remain outstanding.
