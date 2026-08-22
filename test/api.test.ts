@@ -52,12 +52,48 @@ describe('API Router Integration', () => {
             expect(response.status).toBe(400);
         });
 
-        it('works for anonymous users', async () => {
+        it('works for anonymous users with a civic question', async () => {
             const response = await request(app)
                 .post('/api/chat')
-                .send({ message: 'Hello' });
+                .send({ message: 'How do I register to vote?' });
             expect(response.status).toBe(200);
             expect(response.text).toContain('AI Response');
+        });
+
+        it('rejects non-civic topics before calling the AI guide or consuming allowance', async () => {
+            const { handleChat } = await import('../src/chatHandler.js');
+            (handleChat as any).mockClear();
+
+            const response = await request(app)
+                .post('/api/chat')
+                .send({ message: 'Give me a pasta recipe' });
+
+            expect(response.status).toBe(422);
+            expect(response.text).toContain('Civic scope');
+            expect(handleChat).not.toHaveBeenCalled();
+            expect(db.prepare('SELECT COUNT(*) AS count FROM guide_usage').get().count).toBe(0);
+        });
+
+        it('limits public guide requests while retaining a larger signed-in allowance', async () => {
+            for (let requestNumber = 0; requestNumber < 6; requestNumber += 1) {
+                const response = await request(app)
+                    .post('/api/chat')
+                    .send({ message: 'How do I register to vote?' });
+                expect(response.status).toBe(200);
+            }
+
+            const limited = await request(app)
+                .post('/api/chat')
+                .send({ message: 'How do I register to vote?' });
+            expect(limited.status).toBe(429);
+            expect(limited.text).toContain('Guide limit reached');
+
+            db.prepare("INSERT INTO users (id, email, prompt_credits) VALUES (2, 'signed@test.com', 10)").run();
+            const signedIn = await request(app)
+                .post('/api/chat')
+                .set('x-test-session', JSON.stringify({ userId: 2 }))
+                .send({ message: 'How do I register to vote?' });
+            expect(signedIn.status).toBe(200);
         });
 
         it('awards credits and saves history for logged in users', async () => {
@@ -164,10 +200,35 @@ describe('API Router Integration', () => {
             
             const response = await request(app)
                 .post('/api/chat')
-                .send({ message: 'crash me' });
+                .send({ message: 'I have a civic question that should crash the mock' });
             
             expect(response.status).toBe(500);
             expect(response.text).toContain('AI processing failed');
+        });
+    });
+
+    describe('GET /api/places', () => {
+        it('normalizes worldwide geocoding results without claiming non-Indian official connections', async () => {
+            const fetchMock = vi.fn().mockResolvedValue({
+                ok: true,
+                json: async () => ({
+                    results: [
+                        { name: 'Accra', country: 'Ghana', country_code: 'GH', admin1: 'Greater Accra' },
+                        { name: 'Pune', country: 'India', country_code: 'IN', admin1: 'Maharashtra' },
+                    ],
+                }),
+            });
+            vi.stubGlobal('fetch', fetchMock);
+
+            const response = await request(app).get('/api/places?query=accra');
+
+            expect(response.status).toBe(200);
+            expect(response.body.results).toEqual([
+                { label: 'Accra, Ghana', detail: 'Greater Accra · Ghana', source: 'global_preview' },
+                { label: 'Pune, India', detail: 'Maharashtra · India', source: 'global_preview' },
+            ]);
+            expect(fetchMock).toHaveBeenCalledOnce();
+            vi.unstubAllGlobals();
         });
     });
 });
