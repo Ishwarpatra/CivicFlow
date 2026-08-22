@@ -33,3 +33,7 @@
 - [x] Add server-side guide request quotas for anonymous and signed-in users, with documented values and clear client feedback; interpret “limit less if login” as a higher signed-in allowance (6 anonymous and 20 signed-in civic requests per hour by default).
 - [x] Replace the fixed starter-city list with a globally searchable place source or clearly documented broad global dataset, while retaining context-preview truthfulness.
 - [ ] Add unit and live-domain coverage for civic-topic filtering, usage limits, expanded place search, the requested label removal, and repository footer link.
+- [x] Create a custom 1280×640 CivicFlow repository social-preview image with clear legibility at social-card scale.
+- [x] Add the social-preview asset and concise setup/reference guidance to the README.
+- [x] Verify the 1280×640 image dimensions, committed repository path, and GitHub-rendered README.
+- [ ] Assign the final PNG in GitHub’s Social preview setting and verify the resulting repository card.
