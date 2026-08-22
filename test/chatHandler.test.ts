@@ -114,6 +114,20 @@ describe('handleChat', () => {
         expect(result.agentHtml).toContain('Official ECI Electoral Search');
     });
 
+    it('keeps offline guidance neutral for a global context without a connected source', async () => {
+        const { getGeminiModel } = await import('../src/aiService.js');
+        (getGeminiModel as any).mockImplementationOnce(() => { throw new Error('Guide configuration unavailable'); });
+
+        const result = await handleChat('Where do I vote?', [], 'en', undefined, {
+            user: null,
+            civicContext: { label: 'Nairobi, Kenya', source: 'global_preview' },
+        });
+
+        expect(result.agentHtml).toContain('Nairobi, Kenya');
+        expect(result.agentHtml).toContain('Context preview only');
+        expect(result.agentHtml).not.toContain('voters.eci.gov.in');
+    });
+
     it('uses AI for generic messages', async () => {
         const result = await handleChat('What is democracy?');
         expect(result.agentHtml).toContain('AI response text');
