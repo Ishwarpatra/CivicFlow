@@ -1,450 +1,54 @@
-<!DOCTYPE html>
-<html x-data :lang="$store.app ? $store.app.locale : 'en'">
+<!doctype html>
+<!-- Civic Atelier shell: a truthful, source-aware field guide for the live CivicFlow routes. -->
+<html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CivicFlow | Intelligent Indian Election Navigator</title>
-    <!-- Google Analytics 4 (Google Services Integration) -->
-    <script async src="https://www.googletagmanager.com/gtag/js?id=G-XXXXXXXXXX"></script>
-    <script>
-      window.dataLayer = window.dataLayer || [];
-      function gtag(){dataLayer.push(arguments);}
-      gtag('js', new Date());
-      gtag('config', 'G-XXXXXXXXXX');
-      // Track civic action events
-      function trackCivicEvent(action) { gtag('event', action, { event_category: 'civic_engagement' }); }
-    </script>
-    <!-- Google Maps JavaScript API (loaded dynamically when booth lookup is triggered) -->
-    <script>
-      window.__mapsApiKey = '';
-      function loadGoogleMaps(key) {
-        if (key && !document.getElementById('gmap-script')) {
-          const s = document.createElement('script');
-          s.id = 'gmap-script';
-          s.src = `https://maps.googleapis.com/maps/api/js?key=${key}&libraries=places`;
-          s.async = true;
-          document.head.appendChild(s);
-        }
-      }
-    </script>
-    <!-- OpenGraph Virality Meta Tags -->
-    <meta property="og:title" content="CivicFlow: AI Election Navigator">
-    <meta property="og:description" content="Check eligibility, find your polling booth, and know your representatives in seconds.">
-    <meta property="og:image" content="https://storage.googleapis.com/antigravity-assets/civicflow-og.png">
-    <meta property="og:url" content="https://civicflow.in">
-    <meta property="og:type" content="website">
-    <!-- HTMX for AJAX -->
-    <script src="/js/htmx.min.js"></script>
-    <style>
-        [x-cloak] { display: none !important; }
-    </style>
-    <script>
-        const dict = {
-            en: {
-                lang: "Lang:", login: "Log In", logout: "Logout",
-                placeholder: "Ask about eligibility...",
-                synthesizing: "Analyzing civic data...", acquiring: "Acquiring GPS Signal...",
-                check: "Check Eligibility", find: "Find Polling Booth", know: "Know Your Rep",
-                results: "2024 Results",
-                welcome: "Namaskar! I'm your CivicFlow Navigator. I can help you check your voting eligibility, find your polling booth, or know your representative. What would you like to do?",
-                share: "Share CivicFlow", shareCopied: "Link copied!",
-                noNotifs: "No notifications", markRead: "Mark read",
-                loginTitle: "Login", registerTitle: "Register",
-                emailLabel: "Email", passwordLabel: "Password",
-                needAccount: "Need an account? Register", haveAccount: "Have an account? Login",
-                settingsTitle: "Settings", epicLabel: "EPIC Number",
-                stateLabel: "State", constituencyLabel: "Constituency",
-                langPrefLabel: "Preferred Language", cancelBtn: "Cancel", saveBtn: "Save",
-                networkFail: "Network Failure",
-                networkMsg: "Cannot connect to CivicFlow servers. Please check your connection.",
-                locationDenied: "Location Access Denied",
-                locationMsg: "Allow location access or use your saved constituency in Settings.",
-                locationUnsupported: "Location Not Supported",
-                locationTimeout: "Location Request Timed Out",
-                locationUnavailable: "Location Unavailable",
-                locationSecure: "Location requires a secure HTTPS connection."
-            },
-            hi: {
-                lang: "भाषा:", login: "लॉग इन", logout: "लॉग आउट",
-                placeholder: "पात्रता के बारे में पूछें...",
-                synthesizing: "नागरिक डेटा का विश्लेषण कर रहा है...", acquiring: "जीपीएस सिग्नल प्राप्त कर रहा है...",
-                check: "पात्रता जाँचें", find: "मतदान केंद्र खोजें", know: "अपने प्रतिनिधि को जानें",
-                results: "2024 परिणाम",
-                welcome: "नमस्कार! मैं आपका सिविकफ्लो नेविगेटर हूँ। मैं आपको मतदान पात्रता जांचने, मतदान केंद्र ढूंढने, या प्रतिनिधि जानने में मदद कर सकता हूँ।",
-                share: "शेयर करें", shareCopied: "लिंक कॉपी हो गया!",
-                noNotifs: "कोई सूचना नहीं", markRead: "पढ़ा हुआ चिह्नित करें",
-                loginTitle: "लॉग इन", registerTitle: "पंजीकरण",
-                emailLabel: "ईमेल", passwordLabel: "पासवर्ड",
-                needAccount: "खाता नहीं है? पंजीकरण करें", haveAccount: "खाता है? लॉग इन करें",
-                settingsTitle: "सेटिंग्स", epicLabel: "EPIC नंबर",
-                stateLabel: "राज्य", constituencyLabel: "निर्वाचन क्षेत्र",
-                langPrefLabel: "पसंदीदा भाषा", cancelBtn: "रद्द करें", saveBtn: "सहेजें",
-                networkFail: "नेटवर्क विफलता",
-                networkMsg: "CivicFlow सर्वर से कनेक्ट नहीं हो सका। कृपया अपना कनेक्शन जांचें।",
-                locationDenied: "स्थान पहुँच अस्वीकृत",
-                locationMsg: "स्थान की अनुमति दें या सेटिंग्स में अपना निर्वाचन क्षेत्र चुनें।",
-                locationUnsupported: "स्थान समर्थित नहीं है",
-                locationTimeout: "स्थान अनुरोध का समय समाप्त",
-                locationUnavailable: "स्थान उपलब्ध नहीं है",
-                locationSecure: "स्थान के लिए सुरक्षित HTTPS कनेक्शन आवश्यक है।"
-            }
-        };
-
-        document.addEventListener('alpine:init', () => {
-            Alpine.store('app', {
-                locale: localStorage.getItem('locale') || 'en',
-                setLocale(lang) {
-                    this.locale = lang;
-                    localStorage.setItem('locale', lang);
-                    document.documentElement.lang = lang;
-                },
-                csrfToken: '',
-                t(key) {
-                    return dict[this.locale]?.[key] || key;
-                }
-            });
-
-            // Sync locale with HTML element initially
-            document.documentElement.lang = Alpine.store('app').locale;
-
-            // Fetch CSRF token once initialized
-            fetch('/api/csrf').then(r => r.json()).then(data => {
-                Alpine.store('app').csrfToken = data.csrfToken;
-                document.body.addEventListener('htmx:configRequest', (event) => {
-                    event.detail.headers['CSRF-Token'] = data.csrfToken;
-                });
-            });
-        });
-    </script>
-    <script defer src="/js/alpine.min.js"></script>
-    <link rel="stylesheet" href="/style.css">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="CivicFlow helps people identify the next civic step with clear source and availability cues.">
+  <meta name="theme-color" content="#14211E">
+  <title>CivicFlow — Civic intelligence, made human</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/style.css"><link rel="stylesheet" href="/civic-atelier.css">
+  <script src="/js/htmx.min.js"></script><script defer src="/js/alpine.min.js"></script>
+  <style>[x-cloak]{display:none!important}</style>
+  <script>
+    const civicPlaces=[
+      ['Bengaluru, India','Karnataka · India','Indian civic-source route'],['Mumbai, India','Maharashtra · India','Indian civic-source route'],['Delhi, India','National Capital Territory · India','Indian civic-source route'],['Lisbon, Portugal','Lisbon District · Portugal','Context preview'],['Nairobi, Kenya','Nairobi County · Kenya','Context preview'],['Mexico City, Mexico','Ciudad de México · Mexico','Context preview'],['Seoul, South Korea','Seoul · South Korea','Context preview'],['Toronto, Canada','Ontario · Canada','Context preview'],['São Paulo, Brazil','São Paulo · Brazil','Context preview'],['Sydney, Australia','New South Wales · Australia','Context preview'],['Berlin, Germany','Berlin · Germany','Context preview'],['Jakarta, Indonesia','Jakarta · Indonesia','Context preview'],['Cape Town, South Africa','Western Cape · South Africa','Context preview']
+    ].map(([label,detail,source])=>({label,detail,source}));
+    document.addEventListener('alpine:init',()=>Alpine.store('app',{csrfToken:'',async refreshCsrf(){const r=await fetch('/api/csrf');const d=await r.json();this.csrfToken=d.csrfToken;return d.csrfToken;}}));
+    document.addEventListener('DOMContentLoaded',()=>{Alpine.store('app').refreshCsrf().then(()=>document.body.addEventListener('htmx:configRequest',e=>e.detail.headers['CSRF-Token']=Alpine.store('app').csrfToken)).catch(()=>{});document.body.addEventListener('htmx:afterRequest',e=>{if(e.detail.xhr.status===403)Alpine.store('app').refreshCsrf().catch(()=>{});});});
+    function civicApp(){return{
+      places:civicPlaces,place:civicPlaces[0],query:'',contextOpen:false,tab:'route',step:0,message:'',pending:false,status:'',user:null,notices:[],menu:false,auth:false,mode:'login',email:'',password:'',error:'',settings:false,profile:{epic_number:'',state:'',constituency:'',language:'en'},
+      get matches(){const q=this.query.toLowerCase().trim();return q?this.places.filter(p=>(p.label+p.detail).toLowerCase().includes(q)):this.places;},
+      async init(){try{const r=await fetch('/api/me');const d=await r.json();if(d.authenticated){this.user=d;this.profile={...this.profile,...(d.profile||{})};this.getNotices();}}catch(_){this.status='Account status is unavailable while offline.';}},
+      choose(p){this.place=p;this.query='';this.contextOpen=false;this.status=`${p.label} selected. ${p.source==='Context preview'?'Local source matching is not connected for this place yet.':'Indian civic lookup actions are available.'}`;},
+      task(n,prompt){this.tab='route';this.step=n;this.message=prompt;this.$nextTick(()=>document.getElementById('chat-input').focus());},
+      send(){if(!this.message.trim()||this.pending)return;this.pending=true;this.status='Civic guide is checking your question.';htmx.trigger(document.getElementById('chat-form'),'submit');this.message='';},
+      done(){this.pending=false;this.$nextTick(()=>{const c=document.getElementById('chat-container');c.scrollTop=c.scrollHeight;});},
+      async authSubmit(){this.error='';if(!this.email||!this.password){this.error='Enter your email and password.';return;}try{const r=await fetch(this.mode==='login'?'/api/login':'/api/register',{method:'POST',headers:{'Content-Type':'application/json','CSRF-Token':Alpine.store('app').csrfToken},body:JSON.stringify({email:this.email,password:this.password})});const d=await r.json();if(!d.success){this.error=d.message||'We could not continue.';return;}this.user=d.user||d;this.auth=false;this.password='';this.status='You are signed in. Your civic route can now be saved.';this.getNotices();}catch(_){this.error='Network error. Please try again.';}},
+      async signOut(){await fetch('/api/logout',{method:'POST',headers:{'CSRF-Token':Alpine.store('app').csrfToken}});this.user=null;this.menu=false;this.status='You are signed out.';},
+      async getNotices(){if(!this.user)return;try{const r=await fetch('/api/notifications');const d=await r.json();if(d.success)this.notices=d.notifications;}catch(_){}},
+      async read(n){await fetch('/api/notifications/read',{method:'POST',headers:{'Content-Type':'application/json','CSRF-Token':Alpine.store('app').csrfToken},body:JSON.stringify({notification_id:n.id})});n.is_read=1;},
+      async save(){const r=await fetch('/api/profile',{method:'POST',headers:{'Content-Type':'application/json','CSRF-Token':Alpine.store('app').csrfToken},body:JSON.stringify(this.profile)});const d=await r.json();this.status=d.success?'Your civic profile was saved.':(d.message||'Your profile could not be saved.');if(d.success)this.settings=false;}
+    };}
+  </script>
 </head>
-<body class="bg-[#F8F7F3] text-[#1A1A1A] font-sans antialiased flex flex-col items-center justify-center min-h-screen">
-    <a href="#chat-container" class="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-[300] focus:bg-[#FF9933] focus:text-white focus:px-4 focus:py-2 focus:border-2 focus:border-[#1A1A1A] focus:font-bold focus:uppercase">Skip to content</a>
-
-<main x-data="{ status: 0, showParticipation: false, electionId: 'general_2026', participationStatus: '', voteStatus: '', loadVoteStatus() { fetch('/api/vote/status').then(r => r.json()).then(d => { this.voteStatus = d.votes?.map(v => v.election_id + ': ' + v.sync_status).join(', ') || 'No participation records yet.'; }).catch(() => { this.voteStatus = 'Status unavailable. Please retry.'; }); } }" class="w-full max-w-4xl h-screen sm:h-[calc(100vh-2rem)] sm:my-4 flex flex-col bg-white sm:border-8 border-[#1A1A1A] shadow-[8px_8px_0px_#1A1A1A] overflow-hidden relative">
-
-    <!-- Header -->
-    <header class="h-20 border-b-2 border-[#1A1A1A] flex items-center px-4 sm:px-8 justify-between bg-white shrink-0">
-        <div class="flex items-center gap-3">
-            <div class="w-10 h-10 bg-[#FF9933] flex items-center justify-center font-bold text-white text-xl border-2 border-[#1A1A1A] shadow-[2px_2px_0px_#1A1A1A]">CF</div>
-            <h1 class="text-xl sm:text-2xl font-black tracking-tighter uppercase italic">CivicFlow</h1>
-        </div>
-         <div class="flex items-center gap-4 sm:gap-6">
-             <div class="hidden sm:flex items-center gap-2">
-                 <label for="locale" class="text-xs font-bold uppercase" x-text="$store.app.t('lang')">Lang:</label>
-                 <select id="locale" name="locale" :value="$store.app.locale" @change="$store.app.setLocale($event.target.value)" class="border-2 border-[#1A1A1A] p-1 text-xs font-bold uppercase focus:outline-none">
-                     <option value="en">ENG</option>
-                     <option value="hi">HIN</option>
-                 </select>
-             </div>
-             <!-- Web Share API -->
-             <button x-data @click="shareCivicFlow()" :title="$store.app.t('share')" class="hidden sm:flex w-9 h-9 items-center justify-center border-2 border-[#1A1A1A] hover:bg-[#FF9933] hover:text-white transition-colors bg-[#F8F7F3] shadow-[2px_2px_0px_#1A1A1A]" aria-label="Share CivicFlow website">
-                 <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
-             </button>
-             <span id="share-status" class="sr-only" role="status" aria-live="polite"></span>
-             <div id="share-fallback" class="hidden absolute top-20 right-4 z-50 bg-white border-2 border-[#1A1A1A] p-3 shadow-[4px_4px_0px_#1A1A1A]" role="status"><label for="share-url" class="text-[10px] font-bold uppercase block mb-1">Copy this URL</label><input id="share-url" readonly class="border-2 border-[#1A1A1A] p-1 text-xs w-56" value=""><button type="button" onclick="document.getElementById('share-url').select(); document.execCommand('copy')" class="mt-2 text-xs text-[#FF9933] underline font-bold">Copy</button></div>
-             <div class="w-px h-8 bg-[#1A1A1A] opacity-20 hidden sm:block"></div>
-             <div x-data="{ user: null, open: false, showSettings: false, notifs: [], showNotifs: false }" 
-                  x-init="fetch('/api/me').then(r=>r.json()).then(d=>{if(d.authenticated) document.dispatchEvent(new CustomEvent('auth-changed', {detail: d}))})"
-                  @auth-changed.window="user = $event.detail; status = 1; if(user) { fetch('/api/notifications', {headers: {'CSRF-Token': $store.app.csrfToken}}).then(r => r.json()).then(d => { if(d.success) notifs = d.notifications; }) }" class="relative flex items-center gap-2">
-                 <template x-if="user">
-                     <div class="flex items-center gap-2">
-                         <div class="relative">
-                              <button @click="showNotifs = !showNotifs" class="w-10 h-10 bg-white border-2 border-[#1A1A1A] flex items-center justify-center text-[#1A1A1A] shadow-[2px_2px_0px_#1A1A1A] relative" aria-label="Notifications">
-                                   <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path></svg>
-                                   <template x-if="notifs.filter(n => !n.is_read).length > 0">
-                                        <span class="absolute -top-1 -right-1 w-3 h-3 bg-[#ea4335] rounded-full animate-bounce border border-white"></span>
-                                   </template>
-                              </button>
-                              <div x-show="showNotifs" x-cloak @click.away="showNotifs = false" class="absolute right-0 mt-2 w-64 bg-white border-2 border-[#1A1A1A] shadow-[4px_4px_0px_#1A1A1A] max-h-64 overflow-y-auto z-50">
-                                   <template x-if="notifs.length === 0">
-                                       <div class="p-3 text-xs text-center" x-text="$store.app.t('noNotifs')"></div>
-                                   </template>
-                                   <template x-for="notif in notifs" :key="notif.id">
-                                        <div class="p-3 border-b border-[#1A1A1A] text-xs" :class="notif.is_read ? 'opacity-50' : 'bg-[#F8F7F3] font-bold'">
-                                             <div x-text="notif.message"></div>
-                                             <button @click="fetch('/api/notifications/read', {method:'POST', headers:{'Content-Type':'application/json', 'CSRF-Token': $store.app.csrfToken}, body: JSON.stringify({notification_id: notif.id})}).then(() => notif.is_read = true)" x-show="!notif.is_read" class="mt-2 text-[10px] text-[#FF9933] underline" x-text="$store.app.t('markRead')"></button>
-                                        </div>
-                                   </template>
-                              </div>
-                         </div>
-                         <div class="relative flex items-center gap-2">
-                             <div class="text-[10px] font-bold uppercase tracking-widest text-[#1A1A1A] bg-[#FF9933] px-2 py-1 shadow-[2px_2px_0px_#1A1A1A] border-2 border-[#1A1A1A]">
-                                 <span x-text="user.credits || 0"></span> CREDITS
-                             </div>
-                             <button @click="open = !open" class="w-10 h-10 bg-[#1A1A1A] border-2 border-[#1A1A1A] flex items-center justify-center text-sm font-bold text-white shadow-[2px_2px_0px_#FF9933] cursor-pointer" :aria-label="'User menu for ' + user.email" x-text="user.email.charAt(0).toUpperCase()"></button>
-                             <div x-show="open" x-cloak @click.away="open = false" class="absolute right-0 mt-2 w-48 bg-white border-2 border-[#1A1A1A] shadow-[4px_4px_0px_#1A1A1A] p-2 z-50 flex flex-col gap-2 top-10">
-                                 <div class="text-xs opacity-70 p-2 truncate" x-text="user.email"></div>
-                                 <button @click="showSettings = true; open = false; setTimeout(() => document.getElementById('settings-epic')?.focus(), 0);" class="w-full text-left px-2 py-2 text-xs font-bold uppercase hover:bg-[#F0F0F0] text-[#1A1A1A] transition-colors border-t border-[#1A1A1A]">Settings</button>
-                                 <template x-if="user.role === 'admin'">
-                                      <button @click="document.dispatchEvent(new CustomEvent('open-admin-logs')); open = false;" class="w-full text-left px-2 py-2 text-xs font-bold uppercase hover:bg-[#F0F0F0] text-[#1A1A1A] transition-colors border-t border-[#1A1A1A] flex items-center justify-between">
-                                          System Logs
-                                          <span class="w-2 h-2 rounded-full bg-[#ea4335] animate-pulse"></span>
-                                      </button>
-                                 </template>
-                                 <button @click="open = false; fetch('/api/logout', {method: 'POST', headers: { 'CSRF-Token': $store.app.csrfToken }}).then(r => { if(r.ok) { user = null; document.dispatchEvent(new CustomEvent('auth-changed', {detail: null})); } })" class="w-full text-left px-2 py-2 text-xs font-bold uppercase hover:bg-[#F0F0F0] text-[#1A1A1A] hover:text-[#ea4335] transition-colors border-t border-[#1A1A1A]" x-text="$store.app.t('logout')">Logout</button>
-                             </div>
-                         </div>
-                         
-                         <!-- Settings Modal -->
-                         <div x-show="showSettings" x-cloak @keydown.escape.window="showSettings = false" class="fixed inset-0 bg-black/50 z-[200] flex justify-center items-center" role="dialog" aria-modal="true" aria-labelledby="settings-title">
-                             <div @click.away="showSettings = false" tabindex="-1" class="bg-white border-2 border-[#1A1A1A] shadow-[8px_8px_0px_#1A1A1A] p-6 w-96 max-w-[90vw]" x-data="{ formData: {epic_number: '', state: '', constituency: '', language_preference: 'en'} }" x-init="$watch('showSettings', v => { if(v) fetch('/api/me').then(r=>r.json()).then(d => { if(d.authenticated && d.profile) formData = { ...formData, ...d.profile, language_preference: d.profile.language || 'en' }; }) })">
-                                  <h2 id="settings-title" class="text-[#1A1A1A] uppercase tracking-widest font-black text-xl border-b-2 border-[#1A1A1A] pb-2 mb-4" x-text="$store.app.t('settingsTitle')"></h2>
-                                  <div class="space-y-4">
-                                      <div><label for="settings-epic" class="text-[10px] uppercase font-bold tracking-widest block mb-1" x-text="$store.app.t('epicLabel')"></label><input id="settings-epic" type="text" x-model="formData.epic_number" class="w-full border-2 border-[#1A1A1A] px-2 py-1 text-sm bg-[#F8F7F3] focus:bg-white focus:outline-none shadow-[2px_2px_0px_#1A1A1A]"></div>
-                                      <div><label for="settings-state" class="text-[10px] uppercase font-bold tracking-widest block mb-1" x-text="$store.app.t('stateLabel')"></label><input id="settings-state" type="text" x-model="formData.state" class="w-full border-2 border-[#1A1A1A] px-2 py-1 text-sm bg-[#F8F7F3] focus:bg-white focus:outline-none shadow-[2px_2px_0px_#1A1A1A]"></div>
-                                      <div><label for="settings-constituency" class="text-[10px] uppercase font-bold tracking-widest block mb-1" x-text="$store.app.t('constituencyLabel')"></label><input id="settings-constituency" type="text" x-model="formData.constituency" class="w-full border-2 border-[#1A1A1A] px-2 py-1 text-sm bg-[#F8F7F3] focus:bg-white focus:outline-none shadow-[2px_2px_0px_#1A1A1A]"></div>
-                                      <div><label for="settings-lang" class="text-[10px] uppercase font-bold tracking-widest block mb-1" x-text="$store.app.t('langPrefLabel')"></label><select id="settings-lang" x-model="formData.language_preference" class="w-full border-2 border-[#1A1A1A] px-2 py-1 text-sm bg-[#F8F7F3] focus:bg-white focus:outline-none shadow-[2px_2px_0px_#1A1A1A]"><option value="en">English</option><option value="hi">Hindi</option></select></div>
-                                      <div class="flex gap-2 pt-2">
-                                          <button @click="showSettings = false" class="flex-1 py-2 text-xs font-bold uppercase border-2 border-[#1A1A1A] hover:bg-[#F0F0F0]" x-text="$store.app.t('cancelBtn')"></button>
-                                          <button @click="fetch('/api/profile', {method:'POST', headers:{'Content-Type':'application/json','CSRF-Token': $store.app.csrfToken}, body: JSON.stringify({...formData, language: formData.language_preference})}).then(r => r.json()).then(d => { if(d.success) { showSettings = false; $store.app.setLocale(formData.language_preference); } })" class="flex-1 py-2 bg-[#FF9933] text-white border-2 border-[#1A1A1A] text-xs font-bold uppercase shadow-[2px_2px_0px_#1A1A1A] hover:shadow-none hover:translate-y-[2px]" x-text="$store.app.t('saveBtn')"></button>
-                                      </div>
-                                  </div>
-                             </div>
-                         </div>
-                     </div>
-                 </template>
-                 <template x-if="!user">
-                    <div class="flex gap-2" x-data="{ showAuth: false, isLogin: true, email: '', password: '', error: '' }">
-                        <button type="button" data-auth-open @click="showAuth = true; isLogin = true; setTimeout(() => document.getElementById('email-login')?.focus(), 0)" class="px-4 sm:px-6 py-2 bg-[#1A1A1A] text-white text-[10px] sm:text-xs font-bold uppercase tracking-widest hover:bg-[#FF9933] transition-colors border-2 border-[#1A1A1A] shadow-[4px_4px_0px_#1A1A1A] hover:shadow-[2px_2px_0px_#1A1A1A] hover:translate-y-[2px] active:translate-y-[4px] active:shadow-none transition-all" x-text="$store.app.t('login')">Log In</button>
-                        
-                        <!-- Auth Modal -->
-                        <div x-show="showAuth" x-cloak @keydown.escape.window="showAuth = false" class="fixed inset-0 bg-black/50 z-[200] flex justify-center items-center" role="dialog" aria-modal="true" aria-labelledby="auth-title">
-                            <div @click.away="showAuth = false" class="bg-white border-2 border-[#1A1A1A] shadow-[8px_8px_0px_#1A1A1A] p-6 w-96 max-w-[90vw]">
-                                <div class="flex justify-between items-center border-b-2 border-[#1A1A1A] pb-2 mb-4">
-                                    <h2 id="auth-title" class="text-[#1A1A1A] uppercase tracking-widest font-black text-xl" x-text="isLogin ? $store.app.t('loginTitle') : $store.app.t('registerTitle')"></h2>
-                                    <button @click="showAuth = false" class="text-xs font-bold">Close</button>
-                                </div>
-                                <div class="space-y-4">
-                                    <div x-show="error" class="text-[#ea4335] text-xs font-bold bg-[#ea4335]/10 p-2" x-text="error"></div>
-                                    <div><label :for="'email-' + (isLogin ? 'login' : 'reg')" class="text-[10px] uppercase font-bold tracking-widest block mb-1" x-text="$store.app.t('emailLabel')"></label><input :id="'email-' + (isLogin ? 'login' : 'reg')" type="email" x-model="email" class="w-full border-2 border-[#1A1A1A] px-2 py-1 text-sm bg-[#F8F7F3] focus:bg-white focus:outline-none shadow-[2px_2px_0px_#1A1A1A]" required></div>
-                                    <div><label :for="'pass-' + (isLogin ? 'login' : 'reg')" class="text-[10px] uppercase font-bold tracking-widest block mb-1" x-text="$store.app.t('passwordLabel')"></label><input :id="'pass-' + (isLogin ? 'login' : 'reg')" type="password" x-model="password" class="w-full border-2 border-[#1A1A1A] px-2 py-1 text-sm bg-[#F8F7F3] focus:bg-white focus:outline-none shadow-[2px_2px_0px_#1A1A1A]"></div>
-                                    <button @click="fetch(isLogin ? '/api/login' : '/api/register', {method: 'POST', headers: {'Content-Type': 'application/json', 'CSRF-Token': $store.app.csrfToken}, body: JSON.stringify({email, password})}).then(r => r.json()).then(d => { if(d.success) { showAuth = false; document.dispatchEvent(new CustomEvent('auth-changed', {detail: d})); } else { error = d.message; }})" class="w-full py-2 bg-[#FF9933] text-white border-2 border-[#1A1A1A] text-xs font-bold uppercase shadow-[2px_2px_0px_#1A1A1A] hover:shadow-none hover:translate-y-[2px]" x-text="isLogin ? $store.app.t('loginTitle') : $store.app.t('registerTitle')"></button>
-                                    <div class="text-center mt-2">
-                                        <button @click="isLogin = !isLogin; error = ''" class="text-[10px] text-[#1A1A1A] underline" x-text="isLogin ? $store.app.t('needAccount') : $store.app.t('haveAccount')"></button>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                 </template>
-             </div>
-         </div>
-    </header>
-
-    <div x-show="showParticipation" x-cloak @keydown.escape.window="showParticipation = false" class="fixed inset-0 bg-black/50 z-[200] flex justify-center items-center" role="dialog" aria-modal="true" aria-labelledby="participation-title">
-        <div @click.away="showParticipation = false" class="bg-white border-2 border-[#1A1A1A] shadow-[8px_8px_0px_#1A1A1A] p-6 w-96 max-w-[90vw]">
-            <h2 id="participation-title" class="text-[#1A1A1A] uppercase tracking-widest font-black text-xl border-b-2 border-[#1A1A1A] pb-2 mb-4">Record participation</h2>
-            <p class="text-sm mb-4">This records your civic participation in CivicFlow. It does <strong>not</strong> cast an official ballot or connect to an election authority.</p>
-            <label for="participation-election" class="text-[10px] uppercase font-bold tracking-widest block mb-1">Election</label>
-            <select id="participation-election" x-model="electionId" class="w-full border-2 border-[#1A1A1A] px-2 py-2 text-sm bg-[#F8F7F3]">
-                <option value="general_2026">General election 2026</option>
-                <option value="general_2024">General election 2024 (retrospective)</option>
-            </select>
-            <div class="flex gap-2 pt-4">
-                <button @click="showParticipation = false" class="flex-1 py-2 text-xs font-bold uppercase border-2 border-[#1A1A1A]">Cancel</button>
-                <button @click="fetch('/api/vote', {method:'POST', headers:{'Content-Type':'application/json','CSRF-Token': $store.app.csrfToken}, body: JSON.stringify({election_id: electionId})}).then(r => r.text()).then(html => { participationStatus = html; showParticipation = false; })" class="flex-1 py-2 bg-[#FF9933] text-white border-2 border-[#1A1A1A] text-xs font-bold uppercase shadow-[2px_2px_0px_#1A1A1A]">Confirm</button>
-            </div>
-            <button @click="loadVoteStatus()" class="mt-4 text-xs text-[#FF9933] underline font-bold">View participation status</button>
-            <p x-show="voteStatus" x-text="voteStatus" class="text-xs mt-2" role="status"></p>
-        </div>
-    </div>
-    <div x-show="participationStatus" x-html="participationStatus" class="fixed bottom-4 right-4 z-[210] max-w-sm bg-white shadow-[4px_4px_0px_#1A1A1A]" role="status"></div>
-
-    <div class="flex-1 flex overflow-hidden w-full lg:w-3/4 mx-auto">
-        <div class="flex-1 flex flex-col h-full bg-white relative border-l-2 border-r-2 border-[#1A1A1A]">
-            <!-- Chat Interface -->
-            <div id="chat-container" class="flex-1 overflow-y-auto p-4 sm:p-8 space-y-6" aria-live="polite">
-                <!-- Initial Welcome Message -->
-                <div class="flex gap-4">
-                    <div class="w-8 h-8 bg-[#1A1A1A] text-white flex items-center justify-center text-xs font-bold shrink-0 border border-[#1A1A1A]">AI</div>
-                    <div class="p-4 bg-[#F0F0F0] text-[#1A1A1A] text-sm leading-relaxed max-w-[85%] sm:max-w-[80%] border border-[#1A1A1A] shadow-[4px_4px_0px_#1A1A1A]" x-text="$store.app.t('welcome')">
-                        Namaskar! I'm your CivicFlow Navigator. I can help you check your voting eligibility, find your polling booth, or know your representative. What would you like to do?
-                    </div>
-                </div>
-            </div>
-            <!-- Civic Data Attribution -->
-            <div class="px-4 sm:px-8 py-1 text-center">
-                <p class="text-[9px] opacity-40 uppercase tracking-widest font-bold">Data sourced from Election Commission of India &amp; Google Civic API · Powered by Gemini AI</p>
-            </div>
-
-            <!-- Loading Indicator with Gemini Sparkle and Civic Pulse Skeleton -->
-            <div id="loading-indicator" class="htmx-indicator absolute bottom-[180px] left-4 sm:left-8 flex gap-4 w-[80%] z-20" aria-live="polite">
-                <!-- Gemini Sparkle Core -->
-                <div class="w-12 h-12 rounded-xl gemini-sparkle flex items-center justify-center shrink-0 border-2 border-[#1A1A1A] shadow-[4px_4px_0px_#1A1A1A]">
-                    <svg class="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
-                    </svg>
-                </div>
-                
-                <!-- Civic Pulse Skeleton -->
-                <div class="flex-1 bg-white p-3 border-2 border-[#1A1A1A] shadow-[4px_4px_0px_#1A1A1A] flex flex-col justify-center gap-2">
-                    <span class="uppercase tracking-widest font-bold text-[9px] text-[#4285f4]" x-text="$store.app.t('synthesizing')">Analyzing civic data...</span>
-                    <div class="w-full h-3 rounded-sm civic-skeleton border border-gray-200"></div>
-                </div>
-            </div>
-
-            <!-- Input Area -->
-            <div class="p-4 sm:p-6 bg-white border-t-2 border-[#1A1A1A] z-10 shrink-0">
-                <form id="chat-form" x-ref="chatForm" hx-post="/api/chat" hx-target="#chat-container" hx-swap="beforeend" hx-indicator="#loading-indicator" hx-on::before-request="isPending = true" hx-on::after-request="isPending = false; message = ''; $refs.chatInput.focus();" class="flex items-center gap-2 sm:gap-3" x-data="{ message: '', isPending: false }" @submit="if(!message.trim()) { $event.preventDefault(); return; }" @gps-start.window="isPending = true" @gps-end.window="isPending = false" @trigger-chat.window="message = $event.detail; setTimeout(() => htmx.trigger($el, 'submit'), 50);">
-                     <input type="hidden" name="lang" :value="$store.app.locale">
-                     <button type="button" title="Use my location; permission can be revoked in browser settings" @click="$dispatch('request-location')" :disabled="isPending" class="w-12 h-12 flex items-center justify-center border-2 border-[#1A1A1A] text-[#1A1A1A] hover:bg-[#FF9933] hover:text-white transition-colors bg-[#F8F7F3] shadow-[4px_4px_0px_#1A1A1A] disabled:opacity-50 disabled:cursor-not-allowed hover:shadow-[2px_2px_0px_#1A1A1A] hover:translate-y-[2px] shrink-0 active:translate-y-[4px] active:shadow-none transition-all" aria-label="Use my location">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                            <path fill-rule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clip-rule="evenodd" />
-                        </svg>
-                    </button>
-                    <div class="relative flex-1">
-                        <input autofocus x-ref="chatInput" id="chat-input-field" type="text" name="message" x-model="message" required maxlength="500" :readonly="isPending" class="w-full bg-white border-2 border-[#1A1A1A] px-4 py-3 text-sm focus:outline-none focus:bg-[#F8F7F3] disabled:opacity-50 transition shadow-[4px_4px_0px_#1A1A1A] rounded-none italic placeholder:not-italic" :placeholder="$store.app.t('placeholder')" autocomplete="off" :aria-label="$store.app.t('placeholder')">
-                        <span class="absolute right-2 bottom-1 text-[10px] text-gray-500 font-mono" x-text="`${message.length}/500`"></span>
-                    </div>
-
-                    <button type="submit" class="w-12 h-12 bg-[#1A1A1A] text-white flex items-center justify-center border-2 border-[#1A1A1A] hover:bg-[#FF9933] transition-colors shadow-[4px_4px_0px_rgba(26,26,26,0.2)] hover:shadow-[2px_2px_0px_#1A1A1A] hover:translate-y-[2px] shrink-0 disabled:opacity-50 disabled:cursor-not-allowed active:translate-y-[4px] active:shadow-none transition-all" :disabled="!message.trim() || isPending" aria-label="Send Message">
-                        <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"></path></svg>
-                    </button>
-
-                </form>
-            <!-- Suggestion Chips -->
-            <div class="flex flex-wrap gap-x-2 gap-y-2 mt-4 sm:mt-6" x-data>
-                <button @click="$dispatch('trigger-chat', 'Am I eligible to vote?')" class="m3-button" x-text="$store.app.t('check')">Check Eligibility</button>
-                <button @click="$dispatch('trigger-chat', 'Find my polling booth')" class="m3-button-primary" x-text="$store.app.t('find')">Find Polling Booth</button>
-                <button @click="$dispatch('trigger-chat', 'KNOW_REP')" class="m3-button-secondary" x-text="$store.app.t('know')">Know Your Rep</button>
-                <button @click="$dispatch('trigger-chat', 'ELECTION_RESULTS')" class="m3-button" x-text="$store.app.t('results')">2024 Results</button>
-                <button @click="showParticipation = true" class="m3-button-primary">Record participation</button>
-            </div>
-            </div>
-        </div>
-    </div>
-</main>
-
-<script>
-    function shareCivicFlow() {
-        const status = document.getElementById('share-status');
-        const fallback = document.getElementById('share-fallback');
-        const announce = (message) => { if (status) status.textContent = message; };
-        if (navigator.share) {
-            navigator.share({ title: 'CivicFlow', text: 'AI Indian Election Navigator', url: location.href })
-                .then(() => announce('Share dialog opened.'))
-                .catch(() => announce('Share cancelled.'));
-            return;
-        }
-        if (navigator.clipboard?.writeText) {
-            navigator.clipboard.writeText(location.href)
-                .then(() => announce(Alpine.store('app').t('shareCopied')))
-                .catch(() => { if (fallback) { fallback.classList.remove('hidden'); document.getElementById('share-url').value = location.href; } });
-            return;
-        }
-        if (fallback) { fallback.classList.remove('hidden'); document.getElementById('share-url').value = location.href; }
-    }
-
-    document.body.addEventListener('htmx:sendError', function(evt) {
-        document.dispatchEvent(new CustomEvent('chat-error'));
-        const chatBox = document.getElementById('chat-container');
-        if (chatBox) {
-            const _t = (k) => Alpine.store('app').t(k);
-        chatBox.insertAdjacentHTML('beforeend', `<div class="spring-m3 flex gap-4 mb-6 relative chat-bubble-enter show"><div class="w-8 h-8 bg-[#ea4335] text-white flex items-center justify-center text-xs font-bold shrink-0 border border-[#1A1A1A]">ERR</div><div class="p-4 bg-[#F8F7F3] text-[#ea4335] text-sm leading-relaxed max-w-[85%] sm:max-w-[80%] border border-[#ea4335] shadow-[4px_4px_0px_#ea4335] flex flex-col gap-2"><p class="font-bold uppercase tracking-widest text-xs mb-2 text-[#1A1A1A]">${_t('networkFail')}</p><p>${_t('networkMsg')}</p></div></div>`);
-            setTimeout(() => {
-                const newBubble = chatBox.querySelector('.chat-bubble-enter.show');
-                if (newBubble) newBubble.classList.add('chat-bubble-entered');
-            }, 50);
-            chatBox.scrollTop = chatBox.scrollHeight;
-        }
-    });
-
-    document.body.addEventListener('htmx:responseError', function(evt) {
-        document.dispatchEvent(new CustomEvent('chat-error'));
-    });
-
-    // Location handling for Alpine
-    document.addEventListener('request-location', () => {
-         const chatBox = document.getElementById('chat-container');
-         if ("geolocation" in navigator && window.isSecureContext) {
-             document.dispatchEvent(new CustomEvent('gps-start'));
-            const acquiringText = Alpine.store('app').t('acquiring');
-            chatBox.insertAdjacentHTML('beforeend', `<div id="acquire-loader" class="text-center text-xs font-bold uppercase tracking-widest text-[#1A1A1A] my-4 py-3 px-6 border-2 border-[#1A1A1A] bg-white shadow-[4px_4px_0px_#FF9933] block w-[fit-content] mx-auto mt-6 mb-2 flex items-center gap-3"><svg class="w-4 h-4 animate-[spin_2s_linear_infinite] text-[#FF9933]" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg><span>${acquiringText}</span></div>`);
-            
-            navigator.geolocation.getCurrentPosition((position) => {
-                const lat = position.coords.latitude;
-                const lng = position.coords.longitude;
-                const locale = Alpine.store('app').locale;
-                const key = localStorage.getItem('gemini_api_key') || '';
-                
-                htmx.ajax('POST', '/api/chat', {
-                    values: { message: `FIND_BOOTH_LOCATION|${lat}|${lng}`, lang: locale, apiKey: key },
-                    target: '#chat-container',
-                    swap: 'beforeend'
-                }).then(() => {
-                    document.getElementById('acquire-loader')?.remove();
-                    document.dispatchEvent(new CustomEvent('gps-end'));
-                });
-
-            }, (error) => {
-                 document.getElementById('acquire-loader')?.remove();
-                 const _tl = (k) => Alpine.store('app').t(k);
-                 const key = error.code === 3 ? 'locationTimeout' : error.code === 2 ? 'locationUnavailable' : 'locationDenied';
-                 chatBox.insertAdjacentHTML('beforeend', `<div class="spring-m3 flex gap-4 mb-6 relative" role="alert"><div class="w-8 h-8 bg-[#ea4335] text-white flex items-center justify-center text-xs font-bold shrink-0 border border-[#1A1A1A]">ERR</div><div class="p-4 bg-[#F8F7F3] text-[#ea4335] text-sm leading-relaxed max-w-[85%] sm:max-w-[80%] border border-[#ea4335] shadow-[4px_4px_0px_#ea4335]"><p class="font-bold uppercase tracking-widest text-xs mb-2 text-[#1A1A1A]">${_tl(key)}</p><p>${_tl('locationMsg')}</p></div></div>`);
-                 document.dispatchEvent(new CustomEvent('gps-end'));
-            }, { timeout: 10000, maximumAge: 300000, enableHighAccuracy: false });
-        } else {
-             chatBox.insertAdjacentHTML('beforeend', `<div class="p-3 border-2 border-[#ea4335] text-sm" role="alert"><strong>${Alpine.store('app').t(window.isSecureContext ? 'locationUnsupported' : 'locationSecure')}</strong><p>${Alpine.store('app').t('locationMsg')}</p></div>`);
-             document.dispatchEvent(new CustomEvent('gps-end'));
-        }
-    });
-
-    document.body.addEventListener('htmx:beforeSwap', function(evt) {
-        if (evt.detail.xhr.status >= 400 && evt.detail.xhr.status < 600) {
-            evt.detail.shouldSwap = true;
-            evt.detail.isError = false;
-        }
-    });
-
-    // Handle HTMX successful swap and clear message
-    document.body.addEventListener('htmx:afterSwap', function(evt) {
-        if(evt.detail.target.id === 'chat-container') {
-             if (evt.detail.xhr.status >= 400) {
-                 document.dispatchEvent(new CustomEvent('chat-error'));
-             } else if (evt.detail.successful) {
-                 document.dispatchEvent(new CustomEvent('chat-success'));
-             } else {
-                 document.dispatchEvent(new CustomEvent('chat-error'));
-             }
-        }
-    });
-
-    <!-- Use MutationObserver for auto-scrolling reliably without setTimeout -->
-    const chatContainer = document.getElementById('chat-container');
-    if (chatContainer) {
-        const observer = new MutationObserver(() => {
-            chatContainer.scrollTop = chatContainer.scrollHeight;
-        });
-        observer.observe(chatContainer, { childList: true });
-    }
-</script>
-
-    <!-- Admin Log Panel -->
-    <div x-data="{ showAdminLogs: false }" 
-         x-show="showAdminLogs" x-cloak role="dialog" aria-modal="true" aria-labelledby="admin-logs-title" @keydown.escape.window="showAdminLogs = false"
-         @open-admin-logs.window="showAdminLogs = true; htmx.ajax('GET', '/api/admin/logs', { target: '#admin-panel' })"
-         @auth-changed.window="if(!$event.detail || $event.detail.role !== 'admin') showAdminLogs = false"
-         class="fixed inset-0 z-[100] flex justify-end bg-black bg-opacity-50 transition-opacity"
-         x-transition:enter="transition ease-out duration-300"
-         x-transition:enter-start="opacity-0"
-         x-transition:enter-end="opacity-100"
-         x-transition:leave="transition ease-in duration-200"
-         x-transition:leave-start="opacity-100"
-         x-transition:leave-end="opacity-0">
-         <div class="w-full md:w-3/4 lg:w-1/2 h-full bg-[#F8F7F3] border-l-4 border-[#1A1A1A] shadow-[-10px_0px_0px_rgba(26,26,26,0.1)] flex flex-col transform transition-transform"
-              x-transition:enter="transition ease-out duration-300"
-              x-transition:enter-start="translate-x-full"
-              x-transition:enter-end="translate-x-0"
-              x-transition:leave="transition ease-in duration-200"
-              x-transition:leave-start="translate-x-0"
-              x-transition:leave-end="translate-x-full">
-              <div id="admin-panel" class="w-full h-full flex flex-col">
-                  <!-- HTMX logs target -->
-              </div>
-         </div>
-    </div>
-
-</body>
-</html>
+<body><a class="skip-link" href="#chat-input">Skip to civic guide</a>
+<main x-data="civicApp()" x-init="init()" class="civic-shell">
+  <header class="civic-header"><a class="brand" href="/" aria-label="CivicFlow home"><svg viewBox="0 0 56 56" aria-hidden="true"><path d="M28 4 48 16v24L28 52 8 40V16L28 4Z" fill="currentColor"/><path d="m18 35 8-16 4 9 8-7" fill="none" stroke="#F4F1EA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><circle cx="38" cy="21" r="3" fill="#C96B3B"/></svg><span>CivicFlow</span></a><nav aria-label="Primary"><button :class="tab==='route'&&'active'" @click="tab='route'">My route</button><button :class="tab==='briefings'&&'active'" @click="tab='briefings'">Briefings</button><button :class="tab==='saved'&&'active'" @click="tab='saved'">Saved</button></nav><div class="account"><button x-show="!user" @click="auth=true;mode='login'" class="quiet-button">Sign in</button><div x-show="user" x-cloak class="account-wrap"><button @click="menu=!menu" class="avatar" :aria-expanded="menu" x-text="(user.email||'C').charAt(0).toUpperCase()"></button><div x-show="menu" x-cloak @click.outside="menu=false" class="account-menu"><p x-text="user.email"></p><button @click="settings=true;menu=false">Profile &amp; settings</button><button @click="signOut()">Sign out</button></div></div></div></header>
+  <div class="civic-layout">
+    <aside class="route-rail"><p class="eyebrow light">Your civic route</p><h2>Three clear stops.<br>One confident next move.</h2><ol><li :class="step>=1&&'current'"><span>01</span><button @click="task(1,'Help me check my voting eligibility.')">Check eligibility</button><small>Identity and enrolment</small></li><li :class="step>=2&&'current'"><span>02</span><button @click="task(2,'Help me find my polling booth.')">Find polling place</button><small>Local voting information</small></li><li :class="step>=3&&'current'"><span>03</span><button @click="task(3,'Help me understand my representative.')">Know your representative</button><small>Public office and context</small></li></ol><p class="rail-note"><i></i><strong>Source-aware by design</strong><br>Live official matching appears only where CivicFlow has connected records.</p></aside>
+    <section class="field-guide"><div class="field-line"><p class="eyebrow">A field guide for civic action</p><p>Source ledger <b>·</b> checked before action</p></div>
+      <div x-show="tab==='route'" x-cloak><section class="hero"><div><h1>Find the next <em>real</em> civic step.</h1><p>CivicFlow turns a confusing civic task into a source-aware route, while stating the limits of each lookup plainly.</p><button class="primary" @click="task(1,'Help me check my voting eligibility.')">Begin with eligibility <span>→</span></button></div><section class="context-card"><div class="contours" aria-hidden="true"></div><p class="eyebrow">Civic context</p><h2 x-text="place.label"></h2><p x-text="place.detail"></p><button @click="contextOpen=!contextOpen" class="context-toggle"><span x-text="place.source"></span><strong>Change place</strong></button><div x-show="contextOpen" x-cloak @click.outside="contextOpen=false" class="context-picker"><label for="place-search">Search a city, country, or region</label><input id="place-search" x-model="query" placeholder="Try Lisbon or Africa"><div><template x-for="p in matches" :key="p.label"><button @click="choose(p)"><span x-text="p.label"></span><small x-text="p.detail"></small></button></template></div></div></section></section>
+      <section class="route-desk"><div><p class="eyebrow">Route desk</p><h2>Pick up where you are.</h2></div><p>Every route starts with an explanatory answer. Sign in only to save a profile or receive account notices.</p><div class="task-grid"><template x-for="[n,title,desc,prompt] in [[1,'Check eligibility','Understand the enrolment basics and what to verify.','Help me check my voting eligibility.'],[2,'Find polling place','Use a verified address or constituency when available.','Help me find my polling booth.'],[3,'Know your representative','Read the public role before you act or contact an office.','Help me understand my representative.']]" :key="n"><button @click="task(n,prompt)"><span class="task-number" x-text="'0'+n"></span><span><strong x-text="title"></strong><small x-text="desc"></small></span><svg viewBox="0 0 32 24" aria-hidden="true"><path d="M3 19c5-1 5-14 12-14 5 0 6 8 13 8" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="3" cy="19" r="2" fill="currentColor"/><path d="m24 8 4 5-6 1" fill="none" stroke="currentColor" stroke-width="2"/></svg></button></template></div></section></div>
+      <section x-show="tab==='briefings'" x-cloak class="tab-panel"><p class="eyebrow">Briefings</p><h1>Context before urgency.</h1><p>Briefings appear only when CivicFlow has a dated source and clear jurisdictional match. This installation does not publish live briefings for every selected global context.</p><button class="primary" @click="tab='route'">Return to route</button></section>
+      <section x-show="tab==='saved'" x-cloak class="tab-panel"><p class="eyebrow">Saved route</p><h1>Keep only what helps you act.</h1><p x-show="!user">Sign in to save a civic profile and receive account notifications. Your next step remains available in this session.</p><p x-show="user">Saved route history will appear when durable source-backed storage is enabled for your jurisdiction.</p><button x-show="!user" class="primary" @click="auth=true;mode='login'">Sign in to save a route</button></section>
+      <section class="guide"><div><p class="eyebrow">Civic guide</p><h2>Ask the question you would ask a helpful person.</h2></div><div id="chat-container" aria-live="polite" class="chat"><article><b>CF</b><div><p>CivicFlow guide</p><span>Tell me what you are trying to do. I will explain the next step, show what source is available, and flag any information that needs local verification.</span></div></article></div><form id="chat-form" hx-post="/api/chat" hx-target="#chat-container" hx-swap="beforeend" @submit.prevent="send()" hx-on::after-request="window.dispatchEvent(new CustomEvent('civic-chat-complete'))" @civic-chat-complete.window="done()"><label class="sr-only" for="chat-input">Ask CivicFlow a civic question</label><input id="chat-input" name="message" x-model="message" required maxlength="500" placeholder="For example, how do I confirm my polling place?" :disabled="pending"><input type="hidden" name="lang" value="en"><input type="hidden" name="place" :value="place.label"><button type="submit" :disabled="pending"><span x-text="pending?'Checking…':'Ask guide'"></span> →</button></form><p class="disclosure">Guidance does not replace an official election authority. Verify final enrolment, dates, and polling information with the appropriate local source.</p></section>
+    </section>
+  </div>
+  <footer><p><strong>CivicFlow</strong> makes civic intelligence feel human, while preserving the difference between a guide and an official record.</p><button x-show="user" @click="getNotices()">Refresh notices <span x-text="notices.filter(n=>!n.is_read).length"></span></button><div class="notices" x-show="user&&notices.length" x-cloak><template x-for="n in notices" :key="n.id"><button @click="read(n)" :class="n.is_read&&'read'"><span x-text="n.message"></span><small x-show="!n.is_read">Mark read</small></button></template></div></footer>
+  <p class="status" role="status" aria-live="polite" x-text="status"></p>
+  <div x-show="auth" x-cloak class="modal-backdrop" @keydown.escape.window="auth=false"><section @click.outside="auth=false" class="modal" role="dialog" aria-modal="true" aria-labelledby="auth-title"><button class="close" @click="auth=false" aria-label="Close">×</button><p class="eyebrow">Account</p><h2 id="auth-title" x-text="mode==='login'?'Continue your route.':'Save your civic route.'"></h2><p>CivicFlow uses an account only for profile preferences and route-related notices.</p><p class="error" x-show="error" x-text="error"></p><label for="auth-email">Email</label><input id="auth-email" type="email" x-model="email" autocomplete="email"><label for="auth-password">Password</label><input id="auth-password" type="password" x-model="password" autocomplete="current-password"><button class="primary wide" @click="authSubmit()" x-text="mode==='login'?'Sign in':'Create account'"></button><button class="quiet-button wide" @click="mode=mode==='login'?'register':'login';error=''" x-text="mode==='login'?'Need an account? Create one':'Already have an account? Sign in'"></button></section></div>
+  <div x-show="settings" x-cloak class="modal-backdrop" @keydown.escape.window="settings=false"><section @click.outside="settings=false" class="modal" role="dialog" aria-modal="true" aria-labelledby="profile-title"><button class="close" @click="settings=false" aria-label="Close">×</button><p class="eyebrow">Your account</p><h2 id="profile-title">Civic profile</h2><p>These details support personalized Indian civic lookups when connected records are available.</p><label for="profile-epic">EPIC number <small>(optional)</small></label><input id="profile-epic" x-model="profile.epic_number"><label for="profile-state">State</label><input id="profile-state" x-model="profile.state"><label for="profile-constituency">Constituency</label><input id="profile-constituency" x-model="profile.constituency"><label for="profile-language">Preferred language</label><select id="profile-language" x-model="profile.language"><option value="en">English</option><option value="hi">Hindi</option></select><button class="primary wide" @click="save()">Save profile</button></section></div>
+</main></body></html>
