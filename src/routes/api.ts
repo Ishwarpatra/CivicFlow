@@ -35,6 +35,7 @@ const chatSchema = z.object({
     message: z.string().trim().min(1).max(500),
     lang: z.enum(['en', 'hi', 'ta', 'te', 'bn', 'mr', 'gu']).optional(),
     apiKey: z.string().max(255).optional(),
+    place: z.string().trim().min(1).max(120).optional(),
 });
 const electionSchema = z.enum(['general_2024', 'general_2026']);
 
@@ -78,7 +79,7 @@ export function createApiRouter(db: Database, logger: Logger, chatLimiter: Reque
             if (!validationResult.success) {
                 return res.status(400).send(generateErrorHtml("Invalid input format."));
             }
-            const { message, lang, apiKey } = validationResult.data;
+            const { message, lang, apiKey, place } = validationResult.data;
             const locale = lang || req.query.lang || 'en';
 
             const sess = req.session;
@@ -131,6 +132,13 @@ export function createApiRouter(db: Database, logger: Logger, chatLimiter: Reque
             } else {
                 dbHistory = sess.chatHistory || [];
                 userContext = { user: null, electionData };
+            }
+
+            if (place) {
+                userContext.civicContext = {
+                    label: place,
+                    source: /,\s*india$/i.test(place) ? 'india' : 'global_preview',
+                };
             }
 
             const formattedHistory: ChatHistoryItem[] = dbHistory.map((item) => ({
