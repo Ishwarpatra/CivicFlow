@@ -41,3 +41,15 @@ The public guardrail returned the civic-only response for `Write a pasta recipe`
 The rebuilt local service returned four country-agnostic civic-learning cards from `GET /api/briefings`. A protected 501-character guide request returned `400` with **“Guide messages are limited to 500 characters”**. A deterministic headless-browser check selected **Briefings**, saved one learning card, selected **Saved**, then marked the current route stop explored. It observed four briefing cards, one persisted browser-local saved item, and the route summary **“Check eligibility · 1 of 3 stops explored.”**
 
 Focused 780 px captures then showed the populated **Briefings** panel with its country-agnostic source actions and the populated **Saved** panel with a clear browser-local persistence disclosure and removal control. A deliberately delayed briefing request rendered two structured shimmer skeleton cards before the four cards arrived. Transient save and route-confirmation feedback now self-dismisses after 4.2 seconds, preventing it from persistently obscuring tab content. The connected browser could not access the sandbox-local service, so this local interaction evidence uses an isolated Chromium session.
+
+## Global civic-learning public release — 23 August 2026
+
+Render deployment `dep-da58s03m8hqs73brsc90` published commit `97ecb08` and reached **Live** after its internal health check. The public `/api/health` endpoint returned `200 OK`, and `/api/briefings` returned four `global_learning` cards with the explicit country-agnostic notice and `messageLimit: 500`.
+
+In the deployed Chromium interface, **BRIEFINGS** opened the global civic-learning panel. Its cards stated that they are not universal local instructions and linked to OECD, United Nations DESA, and World Bank source material. Saving “Read the decision” displayed **“Read the decision was saved in this browser.”** This validates browser-local persistence only; it does not claim durable or cross-device storage.
+
+Opening **SAVED** then showed the saved learning card, a visible **REMOVE** action, and the explicit disclosure that saved routes and cards stay on the current device and are not represented as a synced account record on this stateless demonstration.
+
+Opening **MY ROUTE** restored the route desk. The first attempt to mark progress without a selected stop returned the clear feedback **“Choose a route stop before marking it explored.”** Selecting **Check eligibility** and marking it explored updated the public summary to **“Check eligibility · 1 of 3 stops explored”** and displayed the browser-local confirmation. This confirms that route state is interactive while preserving the same local-only storage disclosure.
+
+A fresh anonymous public session then obtained its CSRF token from `/api/csrf` and submitted a 501-character civic guide message. The deployed `/api/chat` route rejected it with `400` and the 500-character limit response before guide processing. This confirms that the browser’s visible remaining-character counter is backed by the server-side boundary rather than only a client-side convention.
