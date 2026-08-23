@@ -65,3 +65,11 @@ A headless 375×812 local viewport check found no horizontal overflow (`scrollWi
 ### GitHub publication check
 
 The browser confirmed that [`docs/ACCOUNT_STORAGE.md`](https://github.com/Ishwarpatra/CivicFlow/blob/main/docs/ACCOUNT_STORAGE.md) is visible on `main` with commit `0f0a618`, **docs(storage): describe account data boundaries**, attributed to **Ishwarpatra**. It also confirmed the visible `main`-branch API file at [`src/routes/api.ts`](https://github.com/Ishwarpatra/CivicFlow/blob/main/src/routes/api.ts), whose latest relevant commit is `c439324`, **feat(api): add account storage endpoints**, also attributed to **Ishwarpatra**.
+
+## Public deployment and anonymous-flow revalidation — 23 August 2026
+
+The user approved a Render manual deployment, and Render deployment `dep-da59nirtqb8s739rkuag` published commit `7616eed` (**docs(validation): confirm storage files on GitHub**) to <https://civicflow-oxyg.onrender.com>. Render reported the revision **Live** at 12:36:34 PM after its internal `/api/health` health check. The public `GET /api/health` and `GET /api/briefings` probes both returned `200 OK`; the briefing response retained the global-learning classification, four-source catalogue, country-agnostic notice, and the enforced 500-character message limit.
+
+An independent fresh-profile Chromium check on the public domain confirmed an anonymous visitor has the four expected tabs. **MY ROUTE**, **BRIEFINGS**, and **SAVED** each rendered the Guide panel with `display: none`; **GUIDE** rendered it as `block`, with the chat input present and the route content visually absent. The 1280 px and emulated 375×812 px checks had no horizontal overflow. On the fresh anonymous profile, four briefing cards loaded; saving a briefing produced one browser-local `briefing:` record and the **SAVED** tab rendered one saved card. Choosing the first route task moved the visitor into **GUIDE**, prefilling the question and storing selected step `1` in browser-local route progress.
+
+No public account was created or used during this release check. Consequently, public signed-in persistence remains evidenced by the local isolated-account flow and automated ownership tests, not by a live-user trial. The current Free Render SQLite filesystem remains ephemeral and may reset when the service instance is replaced.
