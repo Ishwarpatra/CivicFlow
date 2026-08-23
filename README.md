@@ -56,10 +56,11 @@ Express server: TypeScript routes, session state, validation, CSRF
   (optional)        (India scoped)     (optional)
         │
         ▼
-SQLite: users, sessions, chat history, local data and sync queue
+Neon PostgreSQL when POSTGRES_DATABASE_URL is configured
+or SQLite local fallback when it is not
         │
         ▼
-Firebase Firestore (optional synchronization target)
+Firebase Firestore (optional vote synchronization target)
 ```
 
 The primary application is intentionally server-rendered. HTMX keeps actions close to the server-side validation and session boundary instead of placing sensitive civic or account state in a thick browser client.
@@ -116,6 +117,7 @@ Copy `.env.example` to `.env`; do not commit the result. `SESSION_SECRET` is req
 | `ALLOWED_ORIGINS` | Production | Comma-separated public HTTPS origins allowed to call the service. |
 | `DB_PATH` | Production | Absolute durable path for the operational SQLite database. |
 | `SESSION_DIR` | Production | Absolute durable directory for the SQLite session store. |
+| `POSTGRES_DATABASE_URL` | Optional | Encrypted Neon PostgreSQL URL. When it is a `postgres://` or `postgresql://` URL, CivicFlow uses PostgreSQL for application data and server sessions. |
 | `GEMINI_API_KEY` | Optional | Enables the configured AI guide. |
 | `GOOGLE_CIVIC_API_KEY` | Optional | Enables the India-scoped civic provider. |
 | `GOOGLE_MAPS_API_KEY` | Optional | Enables configured map embeds. |
@@ -159,7 +161,8 @@ The bundled election dataset is historical and deliberately marked stale. The op
 ### Current limitations
 
 - Global contexts require verified per-jurisdiction authority adapters before live civic claims can be made.
-- SQLite sessions and data storage are single-instance defaults, not a horizontally scalable production design.
+- SQLite sessions and data storage are single-instance defaults, not a horizontally scalable production design. Set `POSTGRES_DATABASE_URL` to a Neon PostgreSQL connection to use the prepared shared-storage path.
+- Neon Free reduces the data-loss risk caused by Render filesystem replacement, but it is still a free-tier service with finite storage, compute, snapshot, and history allowances. Follow the recovery notes in [the Neon storage guide](docs/NEON_POSTGRES.md) rather than describing it as guaranteed disaster recovery.
 - Provider availability, rate limits, and data freshness can limit results; the interface should show that condition instead of guessing.
 - Do not treat this application as legal advice, an election authority, or a substitute for an official registration or polling-place confirmation.
 
@@ -170,6 +173,7 @@ The bundled election dataset is historical and deliberately marked stale. The op
 | [User Guide](docs/USER_GUIDE.md) | Understanding the application’s screens, route steps, and trust states. |
 | [Integration Guide](docs/INTEGRATION.md) | Working with server routes, client contracts, and the Civic Atelier shell. |
 | [Operations Guide](docs/OPERATIONS.md) | Running, backing up, checking, and updating a containerized deployment. |
+| [Neon PostgreSQL Guide](docs/NEON_POSTGRES.md) | Configuring the free PostgreSQL path, controlled SQLite import, validation, and recovery limits. |
 | [Dockerfile](Dockerfile) and [compose.yaml](compose.yaml) | Reviewing the production image and the local single-instance workflow. |
 | [`.env.example`](.env.example) | Configuring supported environment variables without exposing secrets. |
 
