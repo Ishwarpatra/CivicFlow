@@ -43,3 +43,8 @@
 - [x] Add accessible skeleton loading states for deferred civic content and place/guide interactions.
 - [x] Enforce and communicate a guide-message content-length limit in both the browser and server request path.
 - [x] Run browser and automated regression checks for tab controls, skeleton states, civic-learning content, and message-limit boundaries.
+- [x] Audit the authenticated session, database migrations, and current browser-local saved-briefing and route-progress contracts.
+- [x] Add durable per-user tables and authenticated API endpoints for saved briefings and route progress, including safe ownership checks.
+- [x] Update Briefings, Saved, and My Route to use account-backed data for signed-in users while retaining a clear anonymous fallback.
+- [x] Restrict the guide panel to its dedicated guide view so route, briefing, and saved views are not visually dominated by chat.
+- [x] Add automated and browser checks for authentication, create/list/delete saves, route-progress changes, anonymous fallback, responsive layouts, and guide isolation.
