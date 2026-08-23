@@ -7,7 +7,8 @@ CivicFlow supports two explicitly different persistence modes for a visitor's le
 | Visitor state | Saved briefings | Route progress | Scope |
 |---|---|---|---|
 | Anonymous | Browser-local data | Browser-local data | The current browser profile only |
-| Signed in | SQLite-backed account records | SQLite-backed account records | The authenticated CivicFlow account on the current application instance |
+| Signed in without `POSTGRES_DATABASE_URL` | SQLite-backed account records | SQLite-backed account records | The authenticated CivicFlow account on the current application instance |
+| Signed in with `POSTGRES_DATABASE_URL` | PostgreSQL-backed account records | PostgreSQL-backed account records | The authenticated CivicFlow account across Render instance replacement, subject to the Neon service remaining available |
 
 The interface labels these modes directly. It does not represent anonymous browser storage as a synced account record.
 
@@ -37,9 +38,11 @@ The account-aware controller loads saved briefings and selected-place route prog
 
 The **Guide** is intentionally separate from **My route**, **Briefings**, and **Saved**. Selecting a route task moves the visitor to the dedicated Guide tab with the relevant civic prompt, rather than leaving a chat panel on every content view.
 
-## Free Render persistence limitation
+## SQLite fallback and Neon Free limitation
 
-The current public Render demonstration uses an ephemeral filesystem. SQLite-backed account records can reset when Render replaces the instance or its filesystem. The implementation therefore provides account isolation on the active instance, but it must **not** be described as durable cross-device or long-term hosted storage until CivicFlow is moved to persistent managed storage.
+The current public Render demonstration uses an ephemeral filesystem. SQLite-backed account records can reset when Render replaces the instance or its filesystem. The implementation therefore provides account isolation on the active instance, but it must **not** be described as durable cross-device or long-term hosted storage until `POSTGRES_DATABASE_URL` is configured for the Neon path.
+
+With Neon configured, account records and Express sessions live in PostgreSQL rather than Render’s filesystem. This protects them from an ordinary Render instance replacement. Neon Free still has service-level availability and recovery limits, so CivicFlow does not claim zero data-loss risk or enterprise backup guarantees; the setup and recovery procedure is documented in [the Neon PostgreSQL guide](NEON_POSTGRES.md).
 
 ## Verification coverage
 
