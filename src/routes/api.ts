@@ -34,8 +34,9 @@ import { SYSTEM_CONSTANTS } from '../constants.js';
 import { PersistenceManager } from '../persistence.js';
 import { getElectionDataStatus } from '../database.js';
 
+const GUIDE_MESSAGE_MAX_LENGTH = 500;
 const chatSchema = z.object({
-    message: z.string().trim().min(1).max(500),
+    message: z.string().trim().min(1).max(GUIDE_MESSAGE_MAX_LENGTH),
     lang: z.enum(['en', 'hi', 'ta', 'te', 'bn', 'mr', 'gu']).optional(),
     apiKey: z.string().max(255).optional(),
     place: z.string().trim().min(1).max(120).optional(),
@@ -56,6 +57,45 @@ const placeSearchCache = new Map<string, { expiresAt: number; results: Array<{ l
 const CURATED_INDIA_CIVIC_CONTEXTS = new Set(['Bengaluru, India', 'Mumbai, India', 'Delhi, India']);
 
 const CIVIC_TOPIC_PATTERN = /\b(?:election(?:s|al)?|vote(?:r|rs|d|s|ing)?|ballot|poll(?:ing|s)?|candidate(?:s|cy)?|representative(?:s)?|constituency|ward|mayor|council(?:lor|lors)?|parliament|legislature|assembly|referendum|petition|civic|citizen(?:ship)?|public\s+office|government|governance|municipal|local\s+authority|city\s+hall|civic\s+right(?:s)?|eligib(?:le|ility)|register(?:ed|ing|ation)?|epic|booth|democracy|campaign|manifesto|political|participation|complaint|grievance|city\s+service(?:s)?|municipal\s+service(?:s)?|emergency\s+civic\s+service(?:s)?|rti|information\s+act|public\s+hearing|public\s+budget|zoning|permit|licen[cs]e|tax(?:es|ation)?|benefit(?:s)?|welfare|prime\s+minister|president|governor|minister)\b/iu;
+
+const GLOBAL_CIVIC_BRIEFINGS = [
+    {
+        id: 'read-the-decision',
+        title: 'Read the decision',
+        eyebrow: 'Decision map',
+        summary: 'Name the public problem, the decision-maker, the people affected, and the evidence that could change the answer before you act.',
+        action: 'Write one neutral question you want a public body to answer.',
+        sourceLabel: 'OECD citizen participation guidance',
+        sourceUrl: 'https://www.oecd.org/en/publications/2022/09/oecd-guidelines-for-citizen-participation-processes_63b34541.html',
+    },
+    {
+        id: 'participate-with-a-record',
+        title: 'Participate with a record',
+        eyebrow: 'Constructive participation',
+        summary: 'Match your question, evidence, or lived experience to an appropriate public process, then keep a record of the response and next date.',
+        action: 'Confirm the local channel, deadline, and accessibility options with the responsible authority.',
+        sourceLabel: 'United Nations DESA participation principles',
+        sourceUrl: 'https://publicadministration.desa.un.org/intergovernmental-support/cepa/participation',
+    },
+    {
+        id: 'work-through-an-issue',
+        title: 'Work through an issue',
+        eyebrow: 'Issue-solving loop',
+        summary: 'Start with a locally named problem, test a practical and lawful action, collect feedback, and adjust rather than assuming one imported solution will fit.',
+        action: 'Describe one observable change that would show progress for people affected by the issue.',
+        sourceLabel: 'World Bank on problem-driven iterative adaptation',
+        sourceUrl: 'https://www.worldbank.org/en/news/feature/2017/09/30/the-easy-part-of-development-is-over-and-the-easy-part-wasnt-actually-that-easy',
+    },
+    {
+        id: 'close-the-loop',
+        title: 'Close the loop',
+        eyebrow: 'Accountability',
+        summary: 'Compare what was promised, what happened, and what remains unresolved. Share a concise record so other participants can verify the next step.',
+        action: 'Keep dates, links, and source names together; distinguish a published record from an unanswered question.',
+        sourceLabel: 'OECD citizen participation guidance',
+        sourceUrl: 'https://www.oecd.org/en/publications/2022/09/oecd-guidelines-for-citizen-participation-processes_63b34541.html',
+    },
+] as const;
 
 const isSystemCommand = (message: string): boolean => (
     message === SYSTEM_CONSTANTS.COMMANDS.START_PITCH
@@ -131,6 +171,16 @@ export function createApiRouter(db: Database, logger: Logger, chatLimiter: Reque
         )
     `);
 
+    router.get('/briefings', (_req: express.Request, res: express.Response) => {
+        res.setHeader('Cache-Control', 'public, max-age=900');
+        res.json({
+            scope: 'global_learning',
+            notice: 'These are country-agnostic civic-learning frameworks, not verified local authority instructions.',
+            messageLimit: GUIDE_MESSAGE_MAX_LENGTH,
+            briefings: GLOBAL_CIVIC_BRIEFINGS,
+        });
+    });
+
     router.get('/places', async (req: express.Request, res: express.Response) => {
         const queryResult = z.object({ query: z.string().trim().min(2).max(100) }).safeParse(req.query);
         if (!queryResult.success) return res.status(400).json({ results: [] });
@@ -171,6 +221,9 @@ export function createApiRouter(db: Database, logger: Logger, chatLimiter: Reque
         let htmlResponse = "";
         let releaseChatLock: (() => void) | undefined;
         try {
+            if (typeof req.body?.message === 'string' && req.body.message.trim().length > GUIDE_MESSAGE_MAX_LENGTH) {
+                return res.status(400).send(generateErrorHtml(`Guide messages are limited to ${GUIDE_MESSAGE_MAX_LENGTH} characters.`));
+            }
             const validationResult = chatSchema.safeParse(req.body);
             if (!validationResult.success) {
                 return res.status(400).send(generateErrorHtml("Invalid input format."));
