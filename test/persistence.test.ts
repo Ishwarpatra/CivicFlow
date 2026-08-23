@@ -1,8 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { PersistenceManager } from '../src/persistence.js';
-import { Database } from 'better-sqlite3';
-import { Firestore } from 'firebase-admin/firestore';
-import { Logger } from 'pino';
 
 describe('PersistenceManager', () => {
     let mockDb: any;
@@ -12,10 +9,10 @@ describe('PersistenceManager', () => {
 
     beforeEach(() => {
         mockDb = {
-            prepare: vi.fn().mockReturnValue({
-                run: vi.fn(),
-                get: vi.fn()
-            })
+            dialect: 'sqlite',
+            query: vi.fn().mockResolvedValue({ rows: [{ id: 9 }], rowCount: 1, lastInsertId: 9 }),
+            transaction: vi.fn(),
+            close: vi.fn(),
         };
         mockFirestore = {
             collection: vi.fn().mockReturnValue({
@@ -23,29 +20,24 @@ describe('PersistenceManager', () => {
                     set: vi.fn().mockResolvedValue({}),
                     get: vi.fn().mockResolvedValue({
                         exists: true,
-                        data: () => ({ timestamp: '2026-05-01T00:00:00Z' })
-                    })
-                })
-            })
+                        data: () => ({ timestamp: '2026-05-01T00:00:00Z' }),
+                    }),
+                }),
+            }),
         };
-        mockLogger = {
-            warn: vi.fn(),
-            error: vi.fn()
-        };
-        persistence = new PersistenceManager(mockDb as any, mockFirestore as any, mockLogger as any);
+        mockLogger = { warn: vi.fn(), error: vi.fn() };
+        persistence = new PersistenceManager(mockDb, mockFirestore, mockLogger);
     });
 
-    it('records a vote in both SQLite and Firestore', async () => {
+    it('records a vote in both the database and Firestore', async () => {
         const result = await persistence.recordVote(1, 'test@example.com');
         expect(result).toBe('success');
-        expect(mockDb.prepare).toHaveBeenCalledWith(expect.stringContaining('INSERT INTO votes'));
+        expect(mockDb.query).toHaveBeenCalledWith(expect.stringContaining('INSERT INTO votes'), [1, 'general_2026']);
         expect(mockFirestore.collection).toHaveBeenCalledWith('votes');
     });
 
-    it('handles UNIQUE constraint failure in SQLite', async () => {
-        mockDb.prepare.mockReturnValue({
-            run: () => { throw new Error('UNIQUE constraint failed'); }
-        });
+    it('handles duplicate-key failures', async () => {
+        mockDb.query.mockRejectedValueOnce(new Error('UNIQUE constraint failed'));
         const result = await persistence.recordVote(1, 'test@example.com');
         expect(result).toBe('already_voted');
     });
@@ -57,10 +49,10 @@ describe('PersistenceManager', () => {
         expect(mockLogger.warn).toHaveBeenCalled();
     });
 
-    it('syncs data from cloud to local', async () => {
+    it('syncs data from cloud to the database', async () => {
         await persistence.syncFromCloud(1);
         expect(mockFirestore.collection).toHaveBeenCalledWith('votes');
-        expect(mockDb.prepare).toHaveBeenCalledWith(expect.stringContaining('INSERT OR IGNORE INTO votes'));
+        expect(mockDb.query).toHaveBeenCalledWith(expect.stringContaining('ON CONFLICT (user_id, election_id) DO NOTHING'), [1, 'general_2026', '2026-05-01T00:00:00Z']);
     });
 
     it('handles sync failure gracefully', async () => {
