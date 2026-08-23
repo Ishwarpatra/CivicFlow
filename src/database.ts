@@ -36,6 +36,31 @@ export function runMigrations(db: SQLiteDatabase): void {
                 FOREIGN KEY (vote_id) REFERENCES votes(id)
             )
         `)],
+        [4, () => db.exec(`
+            CREATE TABLE IF NOT EXISTS saved_briefings (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                briefing_id TEXT NOT NULL,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(user_id, briefing_id),
+                FOREIGN KEY (user_id) REFERENCES users(id)
+            );
+            CREATE INDEX IF NOT EXISTS idx_saved_briefings_user_created
+                ON saved_briefings(user_id, created_at DESC);
+
+            CREATE TABLE IF NOT EXISTS route_progress (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                place_label TEXT NOT NULL,
+                selected_step INTEGER NOT NULL DEFAULT 0 CHECK(selected_step BETWEEN 0 AND 3),
+                completed_steps TEXT NOT NULL DEFAULT '[]',
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(user_id, place_label),
+                FOREIGN KEY (user_id) REFERENCES users(id)
+            );
+            CREATE INDEX IF NOT EXISTS idx_route_progress_user_updated
+                ON route_progress(user_id, updated_at DESC);
+        `)],
     ];
 
     for (const [version, migrate] of migrations) {
