@@ -42,6 +42,12 @@ const chatSchema = z.object({
     place: z.string().trim().min(1).max(120).optional(),
 });
 const electionSchema = z.enum(['general_2024', 'general_2026']);
+const savedBriefingSchema = z.object({ briefingId: z.string().trim().min(1).max(80) });
+const routeProgressSchema = z.object({
+    placeLabel: z.string().trim().min(1).max(120),
+    selectedStep: z.number().int().min(0).max(3),
+    completedSteps: z.array(z.number().int().min(1).max(3)).max(3),
+});
 
 import { Firestore } from 'firebase-admin/firestore';
 import { RequestHandler } from 'express';
@@ -178,6 +184,102 @@ export function createApiRouter(db: Database, logger: Logger, chatLimiter: Reque
             notice: 'These are country-agnostic civic-learning frameworks, not verified local authority instructions.',
             messageLimit: GUIDE_MESSAGE_MAX_LENGTH,
             briefings: GLOBAL_CIVIC_BRIEFINGS,
+        });
+    });
+
+    router.get('/saved', (req: express.Request, res: express.Response) => {
+        const userId = req.session?.userId;
+        if (!userId) return res.status(401).json({ success: false, message: 'Sign in to access account-backed saved briefings.' });
+
+        const rows = db.prepare(`
+            SELECT briefing_id, created_at
+            FROM saved_briefings
+            WHERE user_id = ?
+            ORDER BY created_at DESC, id DESC
+        `).all(userId) as Array<{ briefing_id: string; created_at: string }>;
+        const items = rows.flatMap((row) => {
+            const briefing = GLOBAL_CIVIC_BRIEFINGS.find((candidate) => candidate.id === row.briefing_id);
+            if (!briefing) return [];
+            return [{
+                ...briefing,
+                id: `briefing:${briefing.id}`,
+                type: 'briefing' as const,
+                savedAt: row.created_at,
+            }];
+        });
+        res.json({ success: true, storage: 'account', items });
+    });
+
+    router.post('/saved/briefings', (req: express.Request, res: express.Response) => {
+        const userId = req.session?.userId;
+        if (!userId) return res.status(401).json({ success: false, message: 'Sign in to save briefings to your account.' });
+        const parsed = savedBriefingSchema.safeParse(req.body);
+        if (!parsed.success) return res.status(400).json({ success: false, message: 'Choose a valid briefing to save.' });
+        const briefing = GLOBAL_CIVIC_BRIEFINGS.find((candidate) => candidate.id === parsed.data.briefingId);
+        if (!briefing) return res.status(404).json({ success: false, message: 'That briefing is no longer available.' });
+
+        db.prepare('INSERT OR IGNORE INTO saved_briefings (user_id, briefing_id) VALUES (?, ?)').run(userId, briefing.id);
+        const saved = db.prepare(`
+            SELECT created_at FROM saved_briefings WHERE user_id = ? AND briefing_id = ?
+        `).get(userId, briefing.id) as { created_at: string };
+        res.status(201).json({
+            success: true,
+            storage: 'account',
+            item: { ...briefing, id: `briefing:${briefing.id}`, type: 'briefing', savedAt: saved.created_at },
+        });
+    });
+
+    router.delete('/saved/briefings/:briefingId', (req: express.Request, res: express.Response) => {
+        const userId = req.session?.userId;
+        if (!userId) return res.status(401).json({ success: false, message: 'Sign in to manage account-backed saved briefings.' });
+        const parsed = z.string().trim().min(1).max(80).safeParse(req.params.briefingId);
+        if (!parsed.success) return res.status(400).json({ success: false, message: 'Choose a valid saved briefing.' });
+        const result = db.prepare('DELETE FROM saved_briefings WHERE user_id = ? AND briefing_id = ?').run(userId, parsed.data);
+        res.json({ success: true, removed: result.changes > 0 });
+    });
+
+    router.get('/route-progress', (req: express.Request, res: express.Response) => {
+        const userId = req.session?.userId;
+        if (!userId) return res.status(401).json({ success: false, message: 'Sign in to access account-backed route progress.' });
+        const parsed = z.object({ place: z.string().trim().min(1).max(120) }).safeParse(req.query);
+        if (!parsed.success) return res.status(400).json({ success: false, message: 'Choose a valid civic context.' });
+        const row = db.prepare(`
+            SELECT place_label, selected_step, completed_steps, updated_at
+            FROM route_progress WHERE user_id = ? AND place_label = ?
+        `).get(userId, parsed.data.place) as { place_label: string; selected_step: number; completed_steps: string; updated_at: string } | undefined;
+        if (!row) return res.json({ success: true, storage: 'account', progress: null });
+        let completedSteps: number[] = [];
+        try {
+            const parsedSteps = JSON.parse(row.completed_steps);
+            completedSteps = Array.isArray(parsedSteps) ? [...new Set(parsedSteps.filter((step): step is number => Number.isInteger(step) && step >= 1 && step <= 3))].sort() : [];
+        } catch {
+            completedSteps = [];
+        }
+        res.json({
+            success: true,
+            storage: 'account',
+            progress: { placeLabel: row.place_label, selectedStep: row.selected_step, completedSteps, updatedAt: row.updated_at },
+        });
+    });
+
+    router.put('/route-progress', (req: express.Request, res: express.Response) => {
+        const userId = req.session?.userId;
+        if (!userId) return res.status(401).json({ success: false, message: 'Sign in to store route progress in your account.' });
+        const parsed = routeProgressSchema.safeParse(req.body);
+        if (!parsed.success) return res.status(400).json({ success: false, message: 'Route progress is invalid.' });
+        const completedSteps = [...new Set(parsed.data.completedSteps)].sort((left, right) => left - right);
+        db.prepare(`
+            INSERT INTO route_progress (user_id, place_label, selected_step, completed_steps, updated_at)
+            VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+            ON CONFLICT(user_id, place_label) DO UPDATE SET
+                selected_step = excluded.selected_step,
+                completed_steps = excluded.completed_steps,
+                updated_at = CURRENT_TIMESTAMP
+        `).run(userId, parsed.data.placeLabel, parsed.data.selectedStep, JSON.stringify(completedSteps));
+        res.json({
+            success: true,
+            storage: 'account',
+            progress: { placeLabel: parsed.data.placeLabel, selectedStep: parsed.data.selectedStep, completedSteps },
         });
     });
 
