@@ -1,6 +1,7 @@
-/* Civic Atelier interactions: truthful global learning, visible loading states, and device-local route saves. */
+/* Civic Atelier interactions: account-backed civic records, truthful anonymous fallback, and a dedicated guide view. */
 (() => {
   const SAVED_ITEMS_KEY = 'civicflow.saved-items.v1';
+  const ROUTE_PROGRESS_KEY = 'civicflow.route-progress.v1';
 
   const readSavedItems = () => {
     try {
@@ -10,8 +11,26 @@
       return [];
     }
   };
-
   const writeSavedItems = (items) => localStorage.setItem(SAVED_ITEMS_KEY, JSON.stringify(items.slice(0, 24)));
+  const readRouteProgress = (placeLabel) => {
+    try {
+      const stored = JSON.parse(localStorage.getItem(ROUTE_PROGRESS_KEY) || '{}');
+      const record = stored?.[placeLabel];
+      return record && typeof record === 'object' ? {
+        selectedStep: Number.isInteger(record.selectedStep) ? record.selectedStep : 0,
+        completedSteps: Array.isArray(record.completedSteps) ? [...new Set(record.completedSteps.filter((step) => Number.isInteger(step) && step >= 1 && step <= 3))].sort() : [],
+      } : { selectedStep: 0, completedSteps: [] };
+    } catch (_) {
+      return { selectedStep: 0, completedSteps: [] };
+    }
+  };
+  const writeRouteProgress = (placeLabel, progress) => {
+    try {
+      const stored = JSON.parse(localStorage.getItem(ROUTE_PROGRESS_KEY) || '{}');
+      stored[placeLabel] = progress;
+      localStorage.setItem(ROUTE_PROGRESS_KEY, JSON.stringify(stored));
+    } catch (_) {}
+  };
 
   window.civicApp = () => ({
     places: civicPlaces,
@@ -46,9 +65,9 @@
     savedPending: false,
     statusTimer: null,
     get matches() {
-      const q = this.query.toLowerCase().trim();
-      const local = q ? this.places.filter((place) => (place.label + place.detail).toLowerCase().includes(q)) : this.places;
-      if (q.length < 2) return local;
+      const query = this.query.toLowerCase().trim();
+      const local = query ? this.places.filter((place) => (place.label + place.detail).toLowerCase().includes(query)) : this.places;
+      if (query.length < 2) return local;
       return [...new Map([...local, ...this.remotePlaces].map((place) => [place.label, place])).values()];
     },
     get remainingCharacters() { return Math.max(0, this.messageLimit - this.message.length); },
@@ -78,15 +97,22 @@
           this.user = data;
           this.profile = { ...this.profile, ...(data.profile || {}) };
           this.getNotices();
+          await Promise.all([this.loadSaved(), this.loadRouteProgress()]);
         }
       } catch (_) {
         this.status = 'Account status is unavailable while offline.';
+      }
+      if (!this.user) {
+        const progress = readRouteProgress(this.place.label);
+        this.step = progress.selectedStep;
+        this.completedSteps = progress.completedSteps;
       }
     },
     async openTab(tab) {
       this.tab = tab;
       if (tab === 'briefings') await this.loadBriefings();
       if (tab === 'saved') await this.loadSaved();
+      if (tab === 'route') await this.loadRouteProgress();
     },
     async searchPlaces() {
       const query = this.query.trim();
@@ -115,7 +141,7 @@
         if (query === this.query.trim()) this.placeSearchPending = false;
       }
     },
-    choose(place) {
+    async choose(place) {
       this.place = place;
       this.query = '';
       this.remotePlaces = [];
@@ -123,23 +149,26 @@
       this.contextOpen = false;
       this.step = 0;
       this.completedSteps = [];
+      await this.loadRouteProgress();
       const chat = document.getElementById('chat-container');
       if (chat) chat.innerHTML = '<article><b>CF</b><div><span>Ask a new question for this civic context. Earlier answers were cleared to avoid mixing jurisdictions.</span></div></article>';
       this.status = `${place.label} selected. ${place.source === 'Context preview' ? 'Local source matching is not connected for this place yet.' : 'Indian civic lookup actions are available.'} Earlier guide answers were cleared.`;
     },
     task(number, prompt) {
-      this.tab = 'route';
+      this.tab = 'guide';
       this.step = number;
       this.message = prompt;
+      void this.persistRouteProgress();
       this.$nextTick(() => document.getElementById('chat-input')?.focus());
     },
-    markCurrentStep() {
+    async markCurrentStep() {
       if (!this.step) {
         this.status = 'Choose a route stop before marking it explored.';
         return;
       }
       if (!this.completedSteps.includes(this.step)) this.completedSteps = [...this.completedSteps, this.step].sort();
-      this.status = `${this.activeRouteLabel} is marked explored in this browser.`;
+      const stored = await this.persistRouteProgress();
+      this.status = stored ? `${this.activeRouteLabel} is marked explored in your account.` : `${this.activeRouteLabel} is marked explored in this browser.`;
     },
     async loadBriefings(force = false) {
       if (this.briefings.length && !force) return;
@@ -159,9 +188,21 @@
     },
     async loadSaved() {
       this.savedPending = true;
-      await new Promise((resolve) => setTimeout(resolve, 120));
-      this.savedItems = readSavedItems();
-      this.savedPending = false;
+      try {
+        if (!this.user) {
+          await new Promise((resolve) => setTimeout(resolve, 120));
+          this.savedItems = readSavedItems();
+          return;
+        }
+        const response = await fetch('/api/saved');
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.message || 'Saved briefings are temporarily unavailable.');
+        this.savedItems = Array.isArray(data.items) ? data.items : [];
+      } catch (error) {
+        this.status = error instanceof Error ? error.message : 'Saved briefings are temporarily unavailable.';
+      } finally {
+        this.savedPending = false;
+      }
     },
     saveItem(item) {
       const next = [{ ...item, savedAt: new Date().toISOString() }, ...this.savedItems.filter((saved) => saved.id !== item.id)];
@@ -178,13 +219,82 @@
         sourceLabel: this.place.source === 'Context preview' ? 'Context preview only' : 'Curated civic-source route',
       });
     },
-    saveBriefing(briefing) {
-      this.saveItem({ ...briefing, id: `briefing:${briefing.id}`, type: 'briefing' });
+    async saveBriefing(briefing) {
+      if (!this.user) {
+        this.saveItem({ ...briefing, id: `briefing:${briefing.id}`, type: 'briefing' });
+        return;
+      }
+      try {
+        const response = await fetch('/api/saved/briefings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'CSRF-Token': Alpine.store('app').csrfToken || '' },
+          body: JSON.stringify({ briefingId: briefing.id }),
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.message || 'The briefing could not be saved.');
+        this.savedItems = [data.item, ...this.savedItems.filter((item) => item.id !== data.item.id)];
+        this.status = `${briefing.title} was saved to your account.`;
+      } catch (error) {
+        this.status = error instanceof Error ? error.message : 'The briefing could not be saved.';
+      }
     },
-    removeSaved(id) {
+    async removeSaved(id) {
+      if (this.user && id.startsWith('briefing:')) {
+        try {
+          const response = await fetch(`/api/saved/briefings/${encodeURIComponent(id.slice('briefing:'.length))}`, {
+            method: 'DELETE',
+            headers: { 'CSRF-Token': Alpine.store('app').csrfToken || '' },
+          });
+          const data = await response.json();
+          if (!response.ok) throw new Error(data.message || 'The saved briefing could not be removed.');
+          this.savedItems = this.savedItems.filter((item) => item.id !== id);
+          this.status = 'Saved briefing removed from your account.';
+          return;
+        } catch (error) {
+          this.status = error instanceof Error ? error.message : 'The saved briefing could not be removed.';
+          return;
+        }
+      }
       this.savedItems = this.savedItems.filter((item) => item.id !== id);
       writeSavedItems(this.savedItems);
       this.status = 'Saved item removed from this browser.';
+    },
+    async loadRouteProgress() {
+      if (!this.user) {
+        const progress = readRouteProgress(this.place.label);
+        this.step = progress.selectedStep;
+        this.completedSteps = progress.completedSteps;
+        return;
+      }
+      try {
+        const response = await fetch(`/api/route-progress?place=${encodeURIComponent(this.place.label)}`);
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.message || 'Route progress is temporarily unavailable.');
+        this.step = data.progress?.selectedStep || 0;
+        this.completedSteps = Array.isArray(data.progress?.completedSteps) ? data.progress.completedSteps : [];
+      } catch (error) {
+        this.status = error instanceof Error ? error.message : 'Route progress is temporarily unavailable.';
+      }
+    },
+    async persistRouteProgress() {
+      const progress = { selectedStep: this.step, completedSteps: this.completedSteps };
+      if (!this.user) {
+        writeRouteProgress(this.place.label, progress);
+        return false;
+      }
+      try {
+        const response = await fetch('/api/route-progress', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', 'CSRF-Token': Alpine.store('app').csrfToken || '' },
+          body: JSON.stringify({ placeLabel: this.place.label, ...progress }),
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.message || 'Route progress could not be saved.');
+        return true;
+      } catch (error) {
+        this.status = error instanceof Error ? error.message : 'Route progress could not be saved.';
+        return false;
+      }
     },
     send() {
       const message = this.message.trim();
@@ -195,7 +305,11 @@
       }
       this.pending = true;
       this.status = 'Checking your civic question.';
-      htmx.ajax('POST', '/api/chat', { source: document.getElementById('chat-form'), target: '#chat-container', swap: 'beforeend', headers: { 'CSRF-Token': Alpine.store('app').csrfToken || '' }, values: { message, lang: 'en', place: this.place.label } });
+      htmx.ajax('POST', '/api/chat', {
+        source: document.getElementById('chat-form'), target: '#chat-container', swap: 'beforeend',
+        headers: { 'CSRF-Token': Alpine.store('app').csrfToken || '' },
+        values: { message, lang: 'en', place: this.place.label },
+      });
       this.message = '';
     },
     done(event) {
@@ -217,7 +331,11 @@
         return;
       }
       try {
-        const response = await fetch(this.mode === 'login' ? '/api/login' : '/api/register', { method: 'POST', headers: { 'Content-Type': 'application/json', 'CSRF-Token': Alpine.store('app').csrfToken }, body: JSON.stringify({ email: this.email, password: this.password }) });
+        const response = await fetch(this.mode === 'login' ? '/api/login' : '/api/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'CSRF-Token': Alpine.store('app').csrfToken },
+          body: JSON.stringify({ email: this.email, password: this.password }),
+        });
         const data = await response.json();
         if (!data.success) {
           this.error = data.message || 'We could not continue.';
@@ -228,6 +346,7 @@
         this.password = '';
         this.status = 'You are signed in. Your civic route can now be saved.';
         this.getNotices();
+        await Promise.all([this.loadSaved(), this.loadRouteProgress()]);
       } catch (_) {
         this.error = 'Network error. Please try again.';
       }
@@ -236,6 +355,8 @@
       await fetch('/api/logout', { method: 'POST', headers: { 'CSRF-Token': Alpine.store('app').csrfToken } });
       this.user = null;
       this.menu = false;
+      await this.loadSaved();
+      await this.loadRouteProgress();
       this.status = 'You are signed out.';
     },
     async getNotices() {
@@ -247,11 +368,19 @@
       } catch (_) {}
     },
     async read(notification) {
-      await fetch('/api/notifications/read', { method: 'POST', headers: { 'Content-Type': 'application/json', 'CSRF-Token': Alpine.store('app').csrfToken }, body: JSON.stringify({ notification_id: notification.id }) });
+      await fetch('/api/notifications/read', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'CSRF-Token': Alpine.store('app').csrfToken },
+        body: JSON.stringify({ notification_id: notification.id }),
+      });
       notification.is_read = 1;
     },
     async save() {
-      const response = await fetch('/api/profile', { method: 'POST', headers: { 'Content-Type': 'application/json', 'CSRF-Token': Alpine.store('app').csrfToken }, body: JSON.stringify(this.profile) });
+      const response = await fetch('/api/profile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'CSRF-Token': Alpine.store('app').csrfToken },
+        body: JSON.stringify(this.profile),
+      });
       const data = await response.json();
       this.status = data.success ? 'Your civic profile was saved.' : (data.message || 'Your profile could not be saved.');
       if (data.success) this.settings = false;
