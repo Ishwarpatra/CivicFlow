@@ -48,3 +48,10 @@
 - [x] Update Briefings, Saved, and My Route to use account-backed data for signed-in users while retaining a clear anonymous fallback.
 - [x] Restrict the guide panel to its dedicated guide view so route, briefing, and saved views are not visually dominated by chat.
 - [x] Add automated and browser checks for authentication, create/list/delete saves, route-progress changes, anonymous fallback, responsive layouts, and guide isolation.
+
+## Persistent PostgreSQL migration planning
+
+- [x] Assess the SQLite schema, data-access coupling, Render PostgreSQL options, migration risks, and a rollback-safe migration sequence for account-backed CivicFlow records.
+- [x] Select and validate a no-paid-services PostgreSQL option, including its inactivity, connection, backup, and recovery limitations before implementation.
+- [x] Implement the Neon Free PostgreSQL connection, asynchronous data layer, PostgreSQL migrations, session store, and controlled SQLite import tooling without committing any secret.
+- [ ] Validate the PostgreSQL path with a disposable database, document Neon Free limits and recovery steps, then request the encrypted `DATABASE_URL` and explicit production cutover approval.
