@@ -1,27 +1,27 @@
-import Database from 'better-sqlite3';
 import { Firestore } from 'firebase-admin/firestore';
 import { Logger } from 'pino';
-
-type SQLiteDatabase = InstanceType<typeof Database>;
+import { asDatabaseClient, isDuplicateKeyError, type DatabaseClient, type DatabaseInput } from './db.js';
 
 export type VoteResult = 'success' | 'sync_pending' | 'already_voted' | 'error';
 
 export class PersistenceManager {
-    constructor(
-        private db: SQLiteDatabase,
-        private firestore: Firestore | null,
-        private logger: Logger
-    ) {}
+    private readonly db: DatabaseClient;
+
+    constructor(db: DatabaseInput, private firestore: Firestore | null, private logger: Logger) {
+        this.db = asDatabaseClient(db);
+    }
 
     async recordVote(userId: number, email: string | null, electionId = 'general_2026'): Promise<VoteResult> {
         try {
-            const result = this.db.prepare('INSERT INTO votes (user_id, election_id) VALUES (?, ?)').run(userId, electionId) as { lastInsertRowid?: number };
-            const voteId = Number(result?.lastInsertRowid);
+            const insert = await this.db.query<{ id: number }>(`
+                INSERT INTO votes (user_id, election_id) VALUES ($1, $2) RETURNING id
+            `, [userId, electionId]);
+            const voteId = Number(insert.rows[0]?.id || insert.lastInsertId);
             if (Number.isInteger(voteId) && voteId > 0) {
-                this.db.prepare(`
-                    INSERT OR IGNORE INTO vote_sync_queue (vote_id, status)
-                    VALUES (?, 'pending')
-                `).run(voteId);
+                await this.db.query(`
+                    INSERT INTO vote_sync_queue (vote_id, status) VALUES ($1, 'pending')
+                    ON CONFLICT (vote_id) DO NOTHING
+                `, [voteId]);
             }
 
             if (!this.firestore) return 'success';
@@ -35,20 +35,26 @@ export class PersistenceManager {
                     timestamp: new Date().toISOString(),
                 }, { merge: true });
                 if (Number.isInteger(voteId) && voteId > 0) {
-                    this.db.prepare("UPDATE vote_sync_queue SET status = 'synced', last_error = NULL, updated_at = CURRENT_TIMESTAMP WHERE vote_id = ?").run(voteId);
+                    await this.db.query(`
+                        UPDATE vote_sync_queue SET status = 'synced', last_error = NULL, updated_at = CURRENT_TIMESTAMP
+                        WHERE vote_id = $1
+                    `, [voteId]);
                 }
                 return 'success';
             } catch (fbErr: unknown) {
                 const message = fbErr instanceof Error ? fbErr.message : String(fbErr);
                 if (Number.isInteger(voteId) && voteId > 0) {
-                    this.db.prepare("UPDATE vote_sync_queue SET status = 'pending', last_error = ?, attempts = attempts + 1, updated_at = CURRENT_TIMESTAMP WHERE vote_id = ?").run(message, voteId);
+                    await this.db.query(`
+                        UPDATE vote_sync_queue SET status = 'pending', last_error = $1, attempts = attempts + 1, updated_at = CURRENT_TIMESTAMP
+                        WHERE vote_id = $2
+                    `, [message, voteId]);
                 }
                 this.logger.warn({ err: message, userId, electionId }, 'Firestore vote write pending retry');
                 return 'sync_pending';
             }
-        } catch (e: unknown) {
-            const errorMessage = e instanceof Error ? e.message : String(e);
-            if (errorMessage.includes('UNIQUE constraint failed')) return 'already_voted';
+        } catch (error: unknown) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            if (isDuplicateKeyError(error)) return 'already_voted';
             this.logger.error({ err: errorMessage, userId, electionId }, 'Persistence Error: recordVote');
             return 'error';
         }
@@ -60,11 +66,13 @@ export class PersistenceManager {
         try {
             const voteDoc = await this.firestore.collection('votes').doc(`${userId}_${electionId}`).get();
             if (voteDoc.exists) {
-                this.db.prepare('INSERT OR IGNORE INTO votes (user_id, election_id, timestamp) VALUES (?, ?, ?)')
-                    .run(userId, electionId, voteDoc.data()?.timestamp);
+                await this.db.query(`
+                    INSERT INTO votes (user_id, election_id, timestamp) VALUES ($1, $2, $3)
+                    ON CONFLICT (user_id, election_id) DO NOTHING
+                `, [userId, electionId, voteDoc.data()?.timestamp]);
             }
-        } catch (e: unknown) {
-            const message = e instanceof Error ? e.message : String(e);
+        } catch (error: unknown) {
+            const message = error instanceof Error ? error.message : String(error);
             this.logger.warn({ err: message, userId, electionId }, 'Persistence Sync failed');
         }
     }
