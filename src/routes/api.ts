@@ -27,12 +27,12 @@ declare module 'express-session' {
         csrfToken?: string;
     }
 }
-import { Database } from 'better-sqlite3';
 import { Logger } from 'pino';
 import { handleChat } from '../chatHandler.js';
 import { SYSTEM_CONSTANTS } from '../constants.js';
 import { PersistenceManager } from '../persistence.js';
 import { getElectionDataStatus } from '../database.js';
+import { asDatabaseClient, type DatabaseClient, type DatabaseInput } from '../db.js';
 
 const GUIDE_MESSAGE_MAX_LENGTH = 500;
 const chatSchema = z.object({
@@ -126,21 +126,21 @@ const consumePlaceSearchWindow = (identity: string): boolean => {
 
 type GuideUsageRow = { window_started_at: number; request_count: number };
 
-const consumeGuideAllowance = (db: Database, identity: string, limit: number): { allowed: true } | { allowed: false; retryAfterMinutes: number } => {
+const consumeGuideAllowance = async (db: DatabaseClient, identity: string, limit: number): Promise<{ allowed: true } | { allowed: false; retryAfterMinutes: number }> => {
     const now = Date.now();
-    const existing = db.prepare('SELECT window_started_at, request_count FROM guide_usage WHERE identity = ?').get(identity) as GuideUsageRow | undefined;
+    const existing = (await db.query<GuideUsageRow>('SELECT window_started_at, request_count FROM guide_usage WHERE identity = $1', [identity])).rows[0];
     if (!existing || now - existing.window_started_at >= GUIDE_WINDOW_MS) {
-        db.prepare(`
+        await db.query(`
             INSERT INTO guide_usage (identity, window_started_at, request_count)
-            VALUES (?, ?, 1)
+            VALUES ($1, $2, 1)
             ON CONFLICT(identity) DO UPDATE SET window_started_at = excluded.window_started_at, request_count = excluded.request_count
-        `).run(identity, now);
+        `, [identity, now]);
         return { allowed: true };
     }
     if (existing.request_count >= limit) {
         return { allowed: false, retryAfterMinutes: Math.ceil((GUIDE_WINDOW_MS - (now - existing.window_started_at)) / 60_000) };
     }
-    db.prepare('UPDATE guide_usage SET request_count = request_count + 1 WHERE identity = ?').run(identity);
+    await db.query('UPDATE guide_usage SET request_count = request_count + 1 WHERE identity = $1', [identity]);
     return { allowed: true };
 };
 
@@ -156,26 +156,27 @@ async function acquireChatLock(key: string): Promise<() => void> {
     };
 }
 
-export function createApiRouter(db: Database, logger: Logger, chatLimiter: RequestHandler, electionData: Record<string, unknown> | null = null, firestoreDb: Firestore | null = null, logProvider: () => Array<{ time: number; level: number; msg?: string; err?: { message?: string } }> = () => []) {
+export function createApiRouter(dbInput: DatabaseInput, logger: Logger, chatLimiter: RequestHandler, electionData: Record<string, unknown> | null = null, firestoreDb: Firestore | null = null, logProvider: () => Array<{ time: number; level: number; msg?: string; err?: { message?: string } }> = () => []) {
     const router = express.Router();
+    const db = asDatabaseClient(dbInput);
     const persistence = new PersistenceManager(db, firestoreDb, logger);
-    db.exec(`
-        CREATE TABLE IF NOT EXISTS notifications (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER NOT NULL,
-            message TEXT NOT NULL,
-            is_read INTEGER DEFAULT 0,
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (user_id) REFERENCES users(id)
-        )
-    `);
-    db.exec(`
-        CREATE TABLE IF NOT EXISTS guide_usage (
-            identity TEXT PRIMARY KEY,
-            window_started_at INTEGER NOT NULL,
-            request_count INTEGER NOT NULL DEFAULT 0
-        )
-    `);
+    if (!('dialect' in dbInput)) {
+        dbInput.exec(`
+            CREATE TABLE IF NOT EXISTS notifications (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                message TEXT NOT NULL,
+                is_read INTEGER DEFAULT 0,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id)
+            );
+            CREATE TABLE IF NOT EXISTS guide_usage (
+                identity TEXT PRIMARY KEY,
+                window_started_at INTEGER NOT NULL,
+                request_count INTEGER NOT NULL DEFAULT 0
+            );
+        `);
+    }
 
     router.get('/briefings', (_req: express.Request, res: express.Response) => {
         res.setHeader('Cache-Control', 'public, max-age=900');
@@ -187,16 +188,16 @@ export function createApiRouter(db: Database, logger: Logger, chatLimiter: Reque
         });
     });
 
-    router.get('/saved', (req: express.Request, res: express.Response) => {
+    router.get('/saved', async (req: express.Request, res: express.Response) => {
         const userId = req.session?.userId;
         if (!userId) return res.status(401).json({ success: false, message: 'Sign in to access account-backed saved briefings.' });
 
-        const rows = db.prepare(`
+        const rows = (await db.query<{ briefing_id: string; created_at: string }>(`
             SELECT briefing_id, created_at
             FROM saved_briefings
-            WHERE user_id = ?
+            WHERE user_id = $1
             ORDER BY created_at DESC, id DESC
-        `).all(userId) as Array<{ briefing_id: string; created_at: string }>;
+        `, [userId])).rows;
         const items = rows.flatMap((row) => {
             const briefing = GLOBAL_CIVIC_BRIEFINGS.find((candidate) => candidate.id === row.briefing_id);
             if (!briefing) return [];
@@ -210,7 +211,7 @@ export function createApiRouter(db: Database, logger: Logger, chatLimiter: Reque
         res.json({ success: true, storage: 'account', items });
     });
 
-    router.post('/saved/briefings', (req: express.Request, res: express.Response) => {
+    router.post('/saved/briefings', async (req: express.Request, res: express.Response) => {
         const userId = req.session?.userId;
         if (!userId) return res.status(401).json({ success: false, message: 'Sign in to save briefings to your account.' });
         const parsed = savedBriefingSchema.safeParse(req.body);
@@ -218,10 +219,11 @@ export function createApiRouter(db: Database, logger: Logger, chatLimiter: Reque
         const briefing = GLOBAL_CIVIC_BRIEFINGS.find((candidate) => candidate.id === parsed.data.briefingId);
         if (!briefing) return res.status(404).json({ success: false, message: 'That briefing is no longer available.' });
 
-        db.prepare('INSERT OR IGNORE INTO saved_briefings (user_id, briefing_id) VALUES (?, ?)').run(userId, briefing.id);
-        const saved = db.prepare(`
-            SELECT created_at FROM saved_briefings WHERE user_id = ? AND briefing_id = ?
-        `).get(userId, briefing.id) as { created_at: string };
+        await db.query('INSERT INTO saved_briefings (user_id, briefing_id) VALUES ($1, $2) ON CONFLICT (user_id, briefing_id) DO NOTHING', [userId, briefing.id]);
+        const saved = (await db.query<{ created_at: string }>(`
+            SELECT created_at FROM saved_briefings WHERE user_id = $1 AND briefing_id = $2
+        `, [userId, briefing.id])).rows[0];
+        if (!saved) return res.status(500).json({ success: false, message: 'Saved briefing could not be read back.' });
         res.status(201).json({
             success: true,
             storage: 'account',
@@ -229,28 +231,28 @@ export function createApiRouter(db: Database, logger: Logger, chatLimiter: Reque
         });
     });
 
-    router.delete('/saved/briefings/:briefingId', (req: express.Request, res: express.Response) => {
+    router.delete('/saved/briefings/:briefingId', async (req: express.Request, res: express.Response) => {
         const userId = req.session?.userId;
         if (!userId) return res.status(401).json({ success: false, message: 'Sign in to manage account-backed saved briefings.' });
         const parsed = z.string().trim().min(1).max(80).safeParse(req.params.briefingId);
         if (!parsed.success) return res.status(400).json({ success: false, message: 'Choose a valid saved briefing.' });
-        const result = db.prepare('DELETE FROM saved_briefings WHERE user_id = ? AND briefing_id = ?').run(userId, parsed.data);
-        res.json({ success: true, removed: result.changes > 0 });
+        const result = await db.query('DELETE FROM saved_briefings WHERE user_id = $1 AND briefing_id = $2', [userId, parsed.data]);
+        res.json({ success: true, removed: result.rowCount > 0 });
     });
 
-    router.get('/route-progress', (req: express.Request, res: express.Response) => {
+    router.get('/route-progress', async (req: express.Request, res: express.Response) => {
         const userId = req.session?.userId;
         if (!userId) return res.status(401).json({ success: false, message: 'Sign in to access account-backed route progress.' });
         const parsed = z.object({ place: z.string().trim().min(1).max(120) }).safeParse(req.query);
         if (!parsed.success) return res.status(400).json({ success: false, message: 'Choose a valid civic context.' });
-        const row = db.prepare(`
+        const row = (await db.query<{ place_label: string; selected_step: number; completed_steps: unknown; updated_at: string }>(`
             SELECT place_label, selected_step, completed_steps, updated_at
-            FROM route_progress WHERE user_id = ? AND place_label = ?
-        `).get(userId, parsed.data.place) as { place_label: string; selected_step: number; completed_steps: string; updated_at: string } | undefined;
+            FROM route_progress WHERE user_id = $1 AND place_label = $2
+        `, [userId, parsed.data.place])).rows[0];
         if (!row) return res.json({ success: true, storage: 'account', progress: null });
         let completedSteps: number[] = [];
         try {
-            const parsedSteps = JSON.parse(row.completed_steps);
+            const parsedSteps = typeof row.completed_steps === 'string' ? JSON.parse(row.completed_steps) : row.completed_steps;
             completedSteps = Array.isArray(parsedSteps) ? [...new Set(parsedSteps.filter((step): step is number => Number.isInteger(step) && step >= 1 && step <= 3))].sort() : [];
         } catch {
             completedSteps = [];
@@ -262,20 +264,20 @@ export function createApiRouter(db: Database, logger: Logger, chatLimiter: Reque
         });
     });
 
-    router.put('/route-progress', (req: express.Request, res: express.Response) => {
+    router.put('/route-progress', async (req: express.Request, res: express.Response) => {
         const userId = req.session?.userId;
         if (!userId) return res.status(401).json({ success: false, message: 'Sign in to store route progress in your account.' });
         const parsed = routeProgressSchema.safeParse(req.body);
         if (!parsed.success) return res.status(400).json({ success: false, message: 'Route progress is invalid.' });
         const completedSteps = [...new Set(parsed.data.completedSteps)].sort((left, right) => left - right);
-        db.prepare(`
+        await db.query(`
             INSERT INTO route_progress (user_id, place_label, selected_step, completed_steps, updated_at)
-            VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+            VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)
             ON CONFLICT(user_id, place_label) DO UPDATE SET
                 selected_step = excluded.selected_step,
                 completed_steps = excluded.completed_steps,
                 updated_at = CURRENT_TIMESTAMP
-        `).run(userId, parsed.data.placeLabel, parsed.data.selectedStep, JSON.stringify(completedSteps));
+        `, [userId, parsed.data.placeLabel, parsed.data.selectedStep, JSON.stringify(completedSteps)]);
         res.json({
             success: true,
             storage: 'account',
@@ -342,7 +344,7 @@ export function createApiRouter(db: Database, logger: Logger, chatLimiter: Reque
             }
 
             const signedIn = Boolean(sess.userId);
-            const guideAllowance = consumeGuideAllowance(db, signedIn ? `user:${sess.userId}` : `ip:${req.ip}`, signedIn ? SIGNED_IN_GUIDE_LIMIT : ANONYMOUS_GUIDE_LIMIT);
+            const guideAllowance = await consumeGuideAllowance(db, signedIn ? `user:${sess.userId}` : `ip:${req.ip}`, signedIn ? SIGNED_IN_GUIDE_LIMIT : ANONYMOUS_GUIDE_LIMIT);
             if (!guideAllowance.allowed) {
                 res.setHeader('Retry-After', String(Math.max(60, guideAllowance.retryAfterMinutes * 60)));
                 return res.status(429).send(generateAgentMessageHtml(generateGuideQuotaHtml(guideAllowance.retryAfterMinutes, signedIn)));
@@ -355,7 +357,7 @@ export function createApiRouter(db: Database, logger: Logger, chatLimiter: Reque
 
             // Give Prompt Credits for civic actions
             if (sess.userId && (message.startsWith(SYSTEM_CONSTANTS.COMMANDS.FIND_BOOTH_LOCATION) || message === SYSTEM_CONSTANTS.COMMANDS.KNOW_REP)) {
-                db.prepare("UPDATE users SET prompt_credits = prompt_credits + 10 WHERE id = ?").run(sess.userId);
+                await db.query('UPDATE users SET prompt_credits = prompt_credits + 10 WHERE id = $1', [sess.userId]);
                 htmlResponse += generateCreditUpdateScript(10);
             }
 
@@ -372,18 +374,18 @@ export function createApiRouter(db: Database, logger: Logger, chatLimiter: Reque
             let userContext: UserContext;
 
             if (sess.userId) {
-                const chatSession = db.prepare("SELECT history FROM chat_sessions WHERE user_id = ? ORDER BY updated_at DESC LIMIT 1").get(sess.userId) as ChatSessionRow | undefined;
+                const chatSession = (await db.query<ChatSessionRow>('SELECT history FROM chat_sessions WHERE user_id = $1 ORDER BY updated_at DESC LIMIT 1', [sess.userId])).rows[0];
                 if (chatSession && chatSession.history) {
-                    try { dbHistory = JSON.parse(chatSession.history); } catch (e) { }
+                    try { dbHistory = typeof chatSession.history === 'string' ? JSON.parse(chatSession.history) : chatSession.history as unknown as ChatHistoryItem[]; } catch { }
                 }
 
-                const user = db.prepare("SELECT * FROM users WHERE id = ?").get(sess.userId) as User | undefined;
+                const user = (await db.query<User>('SELECT * FROM users WHERE id = $1', [sess.userId])).rows[0];
                 if (user && user.constituency) {
-                    const cons = db.prepare("SELECT * FROM constituencies WHERE name = ?").get(user.constituency) as Constituency | undefined;
+                    const cons = (await db.query<Constituency>('SELECT * FROM constituencies WHERE name = $1', [user.constituency])).rows[0];
                     if (cons) {
                         const reps = getElectionDataStatus((electionData || {}) as { valid_until?: string }) === 'stale'
                             ? []
-                            : db.prepare("SELECT * FROM candidates WHERE constituency_id = ? AND incumbent = 1").all(cons.id) as Candidate[];
+                            : (await db.query<Candidate>('SELECT * FROM candidates WHERE constituency_id = $1 AND incumbent = $2', [cons.id, db.dialect === 'postgres' ? true : 1])).rows;
                         userContext = { user: { epic_number: user.epic_number, state: user.state, constituency: user.constituency }, constituency: cons, representatives: reps, electionData };
                     } else {
                         userContext = { user: { epic_number: user.epic_number, state: user.state, constituency: user.constituency }, electionData };
@@ -422,11 +424,14 @@ export function createApiRouter(db: Database, logger: Logger, chatLimiter: Reque
             const safeNewHistory = serializableHistory;
 
             if (sess.userId) {
-                const exists = db.prepare("SELECT id FROM chat_sessions WHERE user_id = ?").get(sess.userId);
-                if (exists) {
-                    db.prepare("UPDATE chat_sessions SET history = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ?").run(JSON.stringify(safeNewHistory), sess.userId);
+                if (db.dialect === 'postgres') {
+                    await db.query(`
+                        INSERT INTO chat_sessions (user_id, history, updated_at) VALUES ($1, $2, CURRENT_TIMESTAMP)
+                        ON CONFLICT (user_id) DO UPDATE SET history = excluded.history, updated_at = CURRENT_TIMESTAMP
+                    `, [sess.userId, JSON.stringify(safeNewHistory)]);
                 } else {
-                    db.prepare("INSERT INTO chat_sessions (user_id, history) VALUES (?, ?)").run(sess.userId, JSON.stringify(safeNewHistory));
+                    const updated = await db.query('UPDATE chat_sessions SET history = $1, updated_at = CURRENT_TIMESTAMP WHERE user_id = $2', [JSON.stringify(safeNewHistory), sess.userId]);
+                    if (!updated.rowCount) await db.query('INSERT INTO chat_sessions (user_id, history) VALUES ($1, $2)', [sess.userId, JSON.stringify(safeNewHistory)]);
                 }
             } else {
                 sess.chatHistory = safeNewHistory;
@@ -443,41 +448,41 @@ export function createApiRouter(db: Database, logger: Logger, chatLimiter: Reque
         }
     });
 
-    router.get('/notifications', (req: express.Request, res: express.Response) => {
+    router.get('/notifications', async (req: express.Request, res: express.Response) => {
         const sess = req.session;
         if (!sess?.userId) return res.status(401).json({ success: false, notifications: [] });
-        const notifications = db.prepare(`
+        const notifications = (await db.query<{ id: number; message: string; is_read: boolean | number; created_at: string }>(`
             SELECT id, message, is_read, created_at
             FROM notifications
-            WHERE user_id = ?
+            WHERE user_id = $1
             ORDER BY created_at DESC
             LIMIT 50
-        `).all(sess.userId) as Array<{ id: number; message: string; is_read: number; created_at: string }>;
+        `, [sess.userId])).rows;
         res.json({
             success: true,
             notifications: notifications.map((notification) => ({ ...notification, is_read: Boolean(notification.is_read) })),
         });
     });
 
-    router.post('/notifications/read', (req: express.Request, res: express.Response) => {
+    router.post('/notifications/read', async (req: express.Request, res: express.Response) => {
         const sess = req.session;
         if (!sess?.userId) return res.status(401).json({ success: false });
         const notificationId = Number(req.body?.notification_id);
         if (!Number.isInteger(notificationId) || notificationId <= 0) return res.status(400).json({ success: false });
-        db.prepare('UPDATE notifications SET is_read = 1 WHERE id = ? AND user_id = ?').run(notificationId, sess.userId);
+        await db.query('UPDATE notifications SET is_read = $1 WHERE id = $2 AND user_id = $3', [db.dialect === 'postgres' ? true : 1, notificationId, sess.userId]);
         res.json({ success: true });
     });
 
-    router.get('/vote/status', (req: express.Request, res: express.Response) => {
+    router.get('/vote/status', async (req: express.Request, res: express.Response) => {
         const sess = req.session;
         if (!sess?.userId) return res.status(401).json({ success: false });
-        const vote = db.prepare(`
+        const vote = (await db.query(`
             SELECT v.election_id, v.timestamp, COALESCE(q.status, 'local_only') AS sync_status
             FROM votes v
             LEFT JOIN vote_sync_queue q ON q.vote_id = v.id
-            WHERE v.user_id = ?
+            WHERE v.user_id = $1
             ORDER BY v.timestamp DESC
-        `).all(sess.userId);
+        `, [sess.userId])).rows;
         res.json({ success: true, votes: vote });
     });
 
