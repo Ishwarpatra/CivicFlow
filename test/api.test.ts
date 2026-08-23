@@ -27,6 +27,8 @@ describe('API Router Integration', () => {
             CREATE TABLE constituencies (id INTEGER PRIMARY KEY, name TEXT, state TEXT);
             CREATE TABLE candidates (id INTEGER PRIMARY KEY, name TEXT, party TEXT, constituency_id INTEGER, incumbent INTEGER);
             CREATE TABLE vote_sync_queue (id INTEGER PRIMARY KEY, vote_id INTEGER UNIQUE, status TEXT, last_error TEXT, attempts INTEGER DEFAULT 0, updated_at DATETIME DEFAULT CURRENT_TIMESTAMP);
+            CREATE TABLE saved_briefings (id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL, briefing_id TEXT NOT NULL, created_at DATETIME DEFAULT CURRENT_TIMESTAMP, UNIQUE(user_id, briefing_id));
+            CREATE TABLE route_progress (id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL, place_label TEXT NOT NULL, selected_step INTEGER NOT NULL DEFAULT 0, completed_steps TEXT NOT NULL DEFAULT '[]', updated_at DATETIME DEFAULT CURRENT_TIMESTAMP, UNIQUE(user_id, place_label));
         `);
         
         logger = pino({ enabled: false });
@@ -258,6 +260,71 @@ describe('API Router Integration', () => {
                 sourceUrl: expect.stringMatching(/^https:\/\//),
             });
             expect(response.body.notice).toContain('country-agnostic');
+        });
+    });
+
+    describe('account-backed saved briefings', () => {
+        const ownerSession = JSON.stringify({ userId: 1, email: 'owner@test.com' });
+        const otherSession = JSON.stringify({ userId: 2, email: 'other@test.com' });
+
+        beforeEach(() => {
+            db.prepare("INSERT INTO users (id, email, prompt_credits) VALUES (1, 'owner@test.com', 10)").run();
+            db.prepare("INSERT INTO users (id, email, prompt_credits) VALUES (2, 'other@test.com', 10)").run();
+        });
+
+        it('requires sign-in and stores only known briefing identifiers', async () => {
+            const anonymous = await request(app).post('/api/saved/briefings').send({ briefingId: 'read-the-decision' });
+            expect(anonymous.status).toBe(401);
+
+            const unknown = await request(app).post('/api/saved/briefings').set('x-test-session', ownerSession).send({ briefingId: 'not-a-briefing' });
+            expect(unknown.status).toBe(404);
+
+            const saved = await request(app).post('/api/saved/briefings').set('x-test-session', ownerSession).send({ briefingId: 'read-the-decision' });
+            expect(saved.status).toBe(201);
+            expect(saved.body.item).toMatchObject({ id: 'briefing:read-the-decision', type: 'briefing' });
+        });
+
+        it('lists and deletes a saved briefing only for its owner', async () => {
+            await request(app).post('/api/saved/briefings').set('x-test-session', ownerSession).send({ briefingId: 'read-the-decision' });
+
+            const otherList = await request(app).get('/api/saved').set('x-test-session', otherSession);
+            expect(otherList.body.items).toEqual([]);
+
+            const otherDelete = await request(app).delete('/api/saved/briefings/read-the-decision').set('x-test-session', otherSession);
+            expect(otherDelete.body).toMatchObject({ success: true, removed: false });
+
+            const ownerList = await request(app).get('/api/saved').set('x-test-session', ownerSession);
+            expect(ownerList.body.items).toHaveLength(1);
+
+            const ownerDelete = await request(app).delete('/api/saved/briefings/read-the-decision').set('x-test-session', ownerSession);
+            expect(ownerDelete.body).toMatchObject({ success: true, removed: true });
+        });
+    });
+
+    describe('account-backed route progress', () => {
+        const ownerSession = JSON.stringify({ userId: 1, email: 'owner@test.com' });
+        const otherSession = JSON.stringify({ userId: 2, email: 'other@test.com' });
+
+        beforeEach(() => {
+            db.prepare("INSERT INTO users (id, email, prompt_credits) VALUES (1, 'owner@test.com', 10)").run();
+            db.prepare("INSERT INTO users (id, email, prompt_credits) VALUES (2, 'other@test.com', 10)").run();
+        });
+
+        it('requires sign-in and persists normalised route progress by user and place', async () => {
+            const anonymous = await request(app).put('/api/route-progress').send({ placeLabel: 'Accra, Ghana', selectedStep: 2, completedSteps: [1, 2] });
+            expect(anonymous.status).toBe(401);
+
+            const updated = await request(app)
+                .put('/api/route-progress')
+                .set('x-test-session', ownerSession)
+                .send({ placeLabel: 'Accra, Ghana', selectedStep: 2, completedSteps: [2, 1, 1] });
+            expect(updated.body.progress).toEqual({ placeLabel: 'Accra, Ghana', selectedStep: 2, completedSteps: [1, 2] });
+
+            const ownerProgress = await request(app).get('/api/route-progress?place=Accra%2C%20Ghana').set('x-test-session', ownerSession);
+            expect(ownerProgress.body.progress).toMatchObject({ selectedStep: 2, completedSteps: [1, 2] });
+
+            const otherProgress = await request(app).get('/api/route-progress?place=Accra%2C%20Ghana').set('x-test-session', otherSession);
+            expect(otherProgress.body.progress).toBeNull();
         });
     });
 });
