@@ -37,3 +37,9 @@
 - [x] Add the social-preview asset and concise setup/reference guidance to the README.
 - [x] Verify the 1280×640 image dimensions, committed repository path, and GitHub-rendered README.
 - [x] Assign the final PNG in GitHub’s Social preview setting and verify the resulting repository card.
+- [x] Audit the current My Route, Briefings, and Saved controls, including persistence and empty-state behavior.
+- [x] Add a non-partisan global civic-learning view covering public decision-making, governance processes, and issue-solving frameworks without presenting country-specific claims as verified authority data.
+- [x] Make the My Route, Briefings, and Saved views functional with accurate loading, empty, and saved-state feedback.
+- [x] Add accessible skeleton loading states for deferred civic content and place/guide interactions.
+- [x] Enforce and communicate a guide-message content-length limit in both the browser and server request path.
+- [x] Run browser and automated regression checks for tab controls, skeleton states, civic-learning content, and message-limit boundaries.
