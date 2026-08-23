@@ -52,6 +52,19 @@ describe('API Router Integration', () => {
             expect(response.status).toBe(400);
         });
 
+        it('rejects guide messages over the published 500-character limit before the AI guide runs', async () => {
+            const { handleChat } = await import('../src/chatHandler.js');
+            (handleChat as any).mockClear();
+
+            const response = await request(app)
+                .post('/api/chat')
+                .send({ message: `vote ${'x'.repeat(501)}` });
+
+            expect(response.status).toBe(400);
+            expect(response.text).toContain('Guide messages are limited to 500 characters');
+            expect(handleChat).not.toHaveBeenCalled();
+        });
+
         it('works for anonymous users with a civic question', async () => {
             const response = await request(app)
                 .post('/api/chat')
@@ -229,6 +242,22 @@ describe('API Router Integration', () => {
             ]);
             expect(fetchMock).toHaveBeenCalledOnce();
             vi.unstubAllGlobals();
+        });
+    });
+
+    describe('GET /api/briefings', () => {
+        it('returns country-agnostic civic-learning briefings and the guide message limit', async () => {
+            const response = await request(app).get('/api/briefings');
+
+            expect(response.status).toBe(200);
+            expect(response.body.scope).toBe('global_learning');
+            expect(response.body.messageLimit).toBe(500);
+            expect(response.body.briefings).toHaveLength(4);
+            expect(response.body.briefings[0]).toMatchObject({
+                id: 'read-the-decision',
+                sourceUrl: expect.stringMatching(/^https:\/\//),
+            });
+            expect(response.body.notice).toContain('country-agnostic');
         });
     });
 });
