@@ -2,7 +2,7 @@ import Database from 'better-sqlite3';
 import { getElectionDataStatus, runMigrations, seedElectionData } from '../src/database.js';
 
 describe('database lifecycle', () => {
-    it('runs migrations idempotently and creates the sync queue', () => {
+    it('runs migrations idempotently and creates sync plus user-storage tables', () => {
         const db = new Database(':memory:');
         db.exec(`
             CREATE TABLE users (id INTEGER PRIMARY KEY, language_preference TEXT, prompt_credits INTEGER);
@@ -13,7 +13,9 @@ describe('database lifecycle', () => {
         runMigrations(db);
         runMigrations(db);
         expect(db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'vote_sync_queue'").get()).toBeDefined();
-        expect(db.prepare('SELECT COUNT(*) AS count FROM schema_migrations').get().count).toBe(3);
+        expect(db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'saved_briefings'").get()).toBeDefined();
+        expect(db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'route_progress'").get()).toBeDefined();
+        expect(db.prepare('SELECT COUNT(*) AS count FROM schema_migrations').get().count).toBe(4);
     });
 
     it('seeds fresh election data without duplicating records', () => {
